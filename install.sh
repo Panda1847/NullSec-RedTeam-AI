@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# NULLSEC RED TEAM AI: ULTIMATE ALL-IN-ONE INSTALLER (v1.0)
+# NULLSEC RED TEAM AI: ULTIMATE ALL-IN-ONE INSTALLER (v1.1)
 # ==============================================================================
 # - Installs Claude Desktop (via claude-desktop-debian)
 # - Installs HexStrike AI (150+ tools)
@@ -31,6 +31,10 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+# Initialize log file with correct permissions
+touch "$LOG_FILE"
+chmod 666 "$LOG_FILE"
+
 log() { echo -e "${GREEN}[INSTALLER]${NC} $1" | tee -a "$LOG_FILE"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1" | tee -a "$LOG_FILE"; }
 error() { echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"; }
@@ -39,8 +43,7 @@ error() { echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"; }
 error_handler() {
     error "$1"
     log "Invoking Guardian for emergency repair..."
-    # The Guardian tool is designed to be run with sudo, which is why we use it here.
-    # It will attempt to fix the issue or provide GitHub links.
+    # Ensure guardian is called with sudo and the error message
     sudo python3 "$GUARDIAN_PATH" "$1"
     exit 1
 }
@@ -48,39 +51,43 @@ error_handler() {
 # --- 1. Advanced Guardian Tool Deployment ---
 deploy_guardian() {
     log "Deploying Advanced Guardian Diagnostic & Repair Tool..."
-    # The Guardian tool is embedded here for a single-file, self-contained installer.
     cat <<'EOF' > "$GUARDIAN_PATH"
 #!/usr/bin/env python3
 import os, sys, subprocess, json, requests, socket, re
 
 LOG_FILE = "/tmp/guardian_diagnostics.log"
-# Known issues and their fixes
+# Ensure log file exists and is writable
+if not os.path.exists(LOG_FILE):
+    with open(LOG_FILE, 'w') as f: pass
+os.chmod(LOG_FILE, 0o666)
+
 GUARDIAN_DB = {
     "externally-managed-environment": "pip install --break-system-packages",
     "ModuleNotFoundError: No module named 'fastmcp'": "pip install fastmcp",
     "port 8888 is already in use": "fuser -k 8888/tcp",
     "Permission denied": "chmod +x {file} && chown $USER:$USER {file}",
-    "Address already in use": "fuser -k {port}/tcp"
+    "Address already in use": "fuser -k {port}/tcp",
+    "No space left on device": "echo 'CRITICAL: Disk space full! Please free up space and restart.' && exit 1"
 }
 
 def log(msg):
     print(f"[\033[94mGUARDIAN\033[0m] {msg}")
-    with open(LOG_FILE, "a") as f: f.write(f"[GUARDIAN] {msg}\n")
+    try:
+        with open(LOG_FILE, "a") as f: f.write(f"[GUARDIAN] {msg}\n")
+    except PermissionError:
+        pass # Fallback if permissions are still an issue
 
 def run_cmd(cmd, shell=True):
     try:
-        # Use sudo for commands that might require it, as the main script is run with sudo
-        result = subprocess.run(f"sudo {cmd}" if shell else ["sudo"] + cmd, shell=shell, capture_output=True, text=True)
+        result = subprocess.run(cmd, shell=shell, capture_output=True, text=True)
         return result.returncode, result.stdout, result.stderr
     except Exception as e: return 1, "", str(e)
 
 def search_github(error_msg):
     log(f"Searching GitHub for: {error_msg}")
-    # Search both HexStrike and general MCP issues
     query = f"hexstrike-ai OR mcp-terminal {error_msg}"
     api_url = f"https://api.github.com/search/issues?q={query}"
     try:
-        # Use a non-sudo request for external API calls
         resp = requests.get(api_url, timeout=10)
         if resp.status_code == 200:
             items = resp.json().get('items', [])
@@ -110,14 +117,15 @@ def diagnose_and_fix(error_msg):
 
 def integrity_check():
     log("Running System Integrity Check...")
+    # Use full paths to be safer
     checks = [
         ("python3 --version", "Python 3"),
         ("node --version", "Node.js"),
         ("git --version", "Git"),
-        ("claude-desktop --version", "Claude Desktop"),
+        ("command -v claude-desktop", "Claude Desktop"),
         ("systemctl is-active hexstrike", "HexStrike Service"),
-        ("ls /opt/hexstrike-ai", "HexStrike Directory"),
-        ("ls /opt/ai-security-lab", "AI Security Lab Directory")
+        ("test -d /opt/hexstrike-ai", "HexStrike Directory"),
+        ("test -d /opt/ai-security-lab", "AI Security Lab Directory")
     ]
     all_pass = True
     for cmd, name in checks:
@@ -144,11 +152,18 @@ EOF
 
 # --- 2. Main Installation ---
 
-log "Starting NullSec Red Team AI Installation (v1.0)..."
+log "Starting NullSec Red Team AI Installation (v1.1)..."
 
 if [[ $EUID -ne 0 ]]; then
    error "This script must be run as root (sudo)."
    exit 1
+fi
+
+# Disk Space Check
+FREE_SPACE=$(df -m / | awk 'NR==2 {print $4}')
+if [ "$FREE_SPACE" -lt 2000 ]; then
+    error "Insufficient disk space ($FREE_SPACE MB). At least 2GB free is recommended."
+    exit 1
 fi
 
 deploy_guardian
@@ -156,25 +171,20 @@ deploy_guardian
 log "Phase 1: System Dependencies & Claude Desktop Setup..."
 apt update -y || error_handler "Apt update failed"
 
-# Failsafe: Check for curl and gpg before adding repo
 if ! command -v curl &> /dev/null || ! command -v gpg &> /dev/null; then
-    apt install -y curl gnupg || error_handler "Failed to install curl or gnupg, required for Claude Desktop setup."
+    apt install -y curl gnupg || error_handler "Failed to install curl or gnupg."
 fi
 
-# Install Claude Desktop (via claude-desktop-debian)
+# Install Claude Desktop
 if ! command -v claude-desktop &> /dev/null; then
     log "Installing Claude Desktop for Linux..."
-    # Failsafe: Use a temporary file for the GPG key to avoid pipe issues
     curl -fsSL https://aaddrick.github.io/claude-desktop-debian/KEY.gpg -o /tmp/claude-desktop.gpg
-    gpg --dearmor -o /usr/share/keyrings/claude-desktop.gpg /tmp/claude-desktop.gpg || error_handler "Failed to add Claude Desktop GPG key."
-    
+    gpg --dearmor -y -o /usr/share/keyrings/claude-desktop.gpg /tmp/claude-desktop.gpg
     echo "deb [signed-by=/usr/share/keyrings/claude-desktop.gpg arch=amd64,arm64] https://aaddrick.github.io/claude-desktop-debian stable main" | tee /etc/apt/sources.list.d/claude-desktop.list
-    
-    apt update -y || error_handler "Apt update failed after adding Claude Desktop repository."
+    apt update -y
     apt install -y claude-desktop || error_handler "Claude Desktop installation failed"
 fi
 
-# Essential Tools
 CORE_DEPS=(
     git python3 python3-venv python3-pip python3-requests 
     nodejs npm curl jq lsof chromium-browser chromium-chromedriver
@@ -186,8 +196,6 @@ CORE_DEPS=(
 log "Installing ${#CORE_DEPS[@]} core security tools..."
 apt install -y "${CORE_DEPS[@]}" || warn "Some core tools failed to install. Continuing..."
 
-# --- External Tool Installation Logic ---
-# Failsafe: Ensure Go environment is set up for the session
 setup_go_env() {
     export GOPATH="$REAL_HOME/go"
     export PATH="$PATH:$GOPATH/bin"
@@ -200,14 +208,12 @@ install_external_tool() {
     local cmd=$2
     if ! command -v "$tool" &> /dev/null; then
         log "Installing $tool via external method..."
-        # Failsafe: Run go install as the real user
-        su -c "$cmd" - "$REAL_USER" || warn "Failed to install $tool. Continuing..."
+        su -c "export GOPATH=$REAL_HOME/go; export PATH=\$PATH:\$GOPATH/bin; $cmd" - "$REAL_USER" || warn "Failed to install $tool."
     fi
 }
 
-# Go-based tools (Nuclei, Subfinder, etc.)
 if ! command -v go &> /dev/null; then
-    apt install -y golang-go || error_handler "Failed to install golang-go, required for Go-based tools."
+    apt install -y golang-go || warn "Failed to install golang-go."
 fi
 setup_go_env
 
@@ -215,16 +221,12 @@ install_external_tool "nuclei" "go install -v github.com/projectdiscovery/nuclei
 install_external_tool "subfinder" "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
 install_external_tool "amass" "go install -v github.com/owasp-amass/amass/v4/...@master"
 
-# Install Metasploit
 if ! command -v msfconsole &> /dev/null; then
     log "Installing Metasploit Framework..."
-    # Failsafe: Check download success
     curl -fsSL https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb -o /tmp/msfinstall
-    if [ ! -s /tmp/msfinstall ]; then
-        warn "Metasploit installer download failed or file is empty. Skipping Metasploit."
-    else
+    if [ -s /tmp/msfinstall ]; then
         chmod 755 /tmp/msfinstall
-        /tmp/msfinstall || warn "Metasploit installation script failed. Continuing..."
+        /tmp/msfinstall || warn "Metasploit installation failed."
     fi
 fi
 
@@ -233,10 +235,8 @@ if [ ! -d "$INSTALL_DIR_HEX" ]; then
     git clone https://github.com/0x4m4/hexstrike-ai.git "$INSTALL_DIR_HEX" || error_handler "HexStrike clone failed"
 fi
 cd "$INSTALL_DIR_HEX"
-# Failsafe: Check for existing venv and remove if broken
-if [ -d "venv" ]; then rm -rf venv; fi
-python3 -m venv venv || error_handler "Failed to create HexStrike virtual environment."
-./venv/bin/pip install --upgrade pip || error_handler "Failed to upgrade pip in HexStrike venv."
+python3 -m venv venv || error_handler "Failed to create HexStrike venv."
+./venv/bin/pip install --upgrade pip
 ./venv/bin/pip install -r requirements.txt || error_handler "HexStrike Python deps failed"
 
 log "Phase 3: AI Security Lab Deployment..."
@@ -244,15 +244,13 @@ if [ ! -d "$INSTALL_DIR_LAB" ]; then
     git clone https://github.com/Panda1847/ai-security-lab.git "$INSTALL_DIR_LAB" || error_handler "AI Security Lab clone failed"
 fi
 cd "$INSTALL_DIR_LAB"
-if [ -d "venv" ]; then rm -rf venv; fi
-python3 -m venv venv || error_handler "Failed to create AI Security Lab virtual environment."
-./venv/bin/pip install --upgrade pip || error_handler "Failed to upgrade pip in AI Security Lab venv."
-./venv/bin/pip install -r requirements.txt || warn "AI Security Lab core Python deps failed. Continuing..."
-./venv/bin/pip install garak pyrit promptfoo || warn "Extra AI security tools failed. Continuing..."
+python3 -m venv venv || error_handler "Failed to create AI Security Lab venv."
+./venv/bin/pip install --upgrade pip
+./venv/bin/pip install -r requirements.txt || warn "AI Security Lab core deps failed."
+./venv/bin/pip install garak pyrit promptfoo || warn "Extra AI security tools failed."
 
 log "Phase 4: Claude Desktop MCP Orchestration..."
 TARGET_PORT=8888
-# Failsafe: Find an open port
 while lsof -Pi :$TARGET_PORT -sTCP:LISTEN -t >/dev/null ; do TARGET_PORT=$((TARGET_PORT + 1)); done
 
 mkdir -p "$CLAUDE_CONFIG_DIR"
@@ -288,7 +286,6 @@ cat <<EOF > "$CLAUDE_CONFIG_FILE"
   }
 }
 EOF
-# Failsafe: Ensure correct ownership for Claude to read the config
 chown -R "$REAL_USER":"$REAL_USER" "$CLAUDE_CONFIG_DIR"
 mkdir -p "$WORKSPACE"
 chown -R "$REAL_USER":"$REAL_USER" "$WORKSPACE"
@@ -310,14 +307,12 @@ Environment=PYTHONUNBUFFERED=1
 WantedBy=multi-user.target
 EOF
 
-# Failsafe: Check service reload/enable status
-systemctl daemon-reload || error_handler "Failed to reload systemd daemon."
-systemctl enable hexstrike || error_handler "Failed to enable hexstrike service."
-systemctl restart hexstrike || error_handler "Failed to start hexstrike service."
+systemctl daemon-reload
+systemctl enable hexstrike
+systemctl restart hexstrike
 
 log "Phase 6: Final Validation..."
-# Failsafe: Run final check as the real user
-su -c "python3 $GUARDIAN_PATH" - "$REAL_USER" || error_handler "Final integrity check failed"
+sudo python3 "$GUARDIAN_PATH" || error_handler "Final integrity check failed"
 
 echo -e "${BLUE}================================================================${NC}"
 echo -e "${GREEN}  NULLSEC RED TEAM AI: ULTIMATE SETUP COMPLETE${NC}"
