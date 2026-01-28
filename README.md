@@ -14,7 +14,7 @@
 
 ---
 
-## 🌟 Features
+## 🌟 Features: Unlocking AI-Driven Penetration Testing
 
 **NULLSEC Red Team AI** is a comprehensive, all-in-one solution that transforms your Linux machine into a state-of-the-art AI-driven security lab. It flawlessly integrates the best tools in the industry to give your AI agent (Claude) full system access and a massive arsenal of offensive capabilities.
 
@@ -25,6 +25,22 @@
 | **AI Security Lab** | Your custom LLM vulnerability testing framework. | **50+** Jailbreak Techniques, Prompt Injection Scanning, Adversarial Testing (Garak, PyRIT). |
 | **MCP Orchestration** | Pre-configured `claude_desktop_config.json`. | **Full System Access** (Terminal, Filesystem, Browser Automation) for Claude. |
 | **Guardian Tool** | Embedded diagnostic and self-healing utility. | Auto-Fixes Common Errors, GitHub Issue Search for Unknown Problems, Integrity Checks. |
+
+---
+
+## 📸 Visual Demonstration: The AI in Action
+
+These screenshots demonstrate the seamless integration and powerful capabilities available to the AI agent within the Claude Desktop environment.
+
+| **AI Security Lab Configuration** | **Offensive Toolset Overview** |
+| :---: | :---: |
+| <img src="assets/images/screenshot_1.png" alt="Claude Desktop Settings showing AI Security Lab MCP" width="450"/> | <img src="assets/images/screenshot_2.png" alt="Claude Desktop chat showing Security & Penetration Testing tools" width="450"/> |
+| *Verification of the AI Security Lab and HexStrike MCP servers running locally.* | *A partial list of the 150+ tools available to the AI agent, categorized for easy access.* |
+
+<div align="center">
+  <img src="assets/images/screenshot_3.png" alt="Claude Desktop chat showing File System and Development tools" width="700"/>
+  <p><em>The full range of capabilities, including File System Operations and Development & Execution, giving the AI complete control over the lab environment.</em></p>
+</div>
 
 ---
 
