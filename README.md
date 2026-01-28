@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="assets/nullsec_logo.png" alt="NullSec Red Team AI Logo" width="300"/>
-  <h1>NULLSEC RED TEAM AI</h1>
+  <img src="assets/nullsec_3d_banner.png" alt="NullSec Red Team AI Banner" width="100%"/>
   <p><strong>The Ultimate AI-Powered Red Team Platform: Claude Desktop + HexStrike AI + AI Security Lab</strong></p>
   <p>A single, self-contained installer for the most advanced AI-driven penetration testing and security research environment.</p>
   
