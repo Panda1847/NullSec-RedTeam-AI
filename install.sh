@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# NULLSEC RED TEAM AI: ULTIMATE ALL-IN-ONE INSTALLER (v1.1)
+# NULLSEC RED TEAM AI: ULTIMATE ALL-IN-ONE INSTALLER (v1.2)
 # ==============================================================================
 # - Installs Claude Desktop (via claude-desktop-debian)
 # - Installs HexStrike AI (150+ tools)
@@ -9,6 +9,7 @@
 # - Configures Claude Desktop with full MCP integration
 # - Deploys Advanced Guardian Diagnostic & Repair Tool
 # - Full Sudo & System Access for Claude
+# - Optimized for Kali Linux & Debian Systems
 # ==============================================================================
 
 # --- Configuration ---
@@ -31,7 +32,7 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Initialize log file with correct permissions
+# Initialize log file
 touch "$LOG_FILE"
 chmod 666 "$LOG_FILE"
 
@@ -43,7 +44,6 @@ error() { echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"; }
 error_handler() {
     error "$1"
     log "Invoking Guardian for emergency repair..."
-    # Ensure guardian is called with sudo and the error message
     sudo python3 "$GUARDIAN_PATH" "$1"
     exit 1
 }
@@ -56,7 +56,6 @@ deploy_guardian() {
 import os, sys, subprocess, json, requests, socket, re
 
 LOG_FILE = "/tmp/guardian_diagnostics.log"
-# Ensure log file exists and is writable
 if not os.path.exists(LOG_FILE):
     with open(LOG_FILE, 'w') as f: pass
 os.chmod(LOG_FILE, 0o666)
@@ -75,7 +74,7 @@ def log(msg):
     try:
         with open(LOG_FILE, "a") as f: f.write(f"[GUARDIAN] {msg}\n")
     except PermissionError:
-        pass # Fallback if permissions are still an issue
+        pass
 
 def run_cmd(cmd, shell=True):
     try:
@@ -117,7 +116,6 @@ def diagnose_and_fix(error_msg):
 
 def integrity_check():
     log("Running System Integrity Check...")
-    # Use full paths to be safer
     checks = [
         ("python3 --version", "Python 3"),
         ("node --version", "Node.js"),
@@ -152,7 +150,7 @@ EOF
 
 # --- 2. Main Installation ---
 
-log "Starting NullSec Red Team AI Installation (v1.1)..."
+log "Starting NullSec Red Team AI Installation (v1.2)..."
 
 if [[ $EUID -ne 0 ]]; then
    error "This script must be run as root (sudo)."
@@ -161,9 +159,8 @@ fi
 
 # Disk Space Check
 FREE_SPACE=$(df -m / | awk 'NR==2 {print $4}')
-if [ "$FREE_SPACE" -lt 2000 ]; then
-    error "Insufficient disk space ($FREE_SPACE MB). At least 2GB free is recommended."
-    exit 1
+if [ "$FREE_SPACE" -lt 3000 ]; then
+    warn "Low disk space ($FREE_SPACE MB). 3GB+ is highly recommended."
 fi
 
 deploy_guardian
@@ -185,13 +182,23 @@ if ! command -v claude-desktop &> /dev/null; then
     apt install -y claude-desktop || error_handler "Claude Desktop installation failed"
 fi
 
+# Core Security Arsenal
 CORE_DEPS=(
     git python3 python3-venv python3-pip python3-requests 
-    nodejs npm curl jq lsof chromium-browser chromium-chromedriver
-    nmap masscan fierce dnsenum gobuster dirsearch ffuf dirb 
-    nikto sqlmap wafw00f hydra john hashcat medusa patator 
-    gdb binwalk foremost steghide libimage-exiftool-perl
+    nodejs npm curl jq lsof nmap masscan fierce dnsenum 
+    gobuster dirsearch ffuf dirb nikto sqlmap wafw00f 
+    hydra john hashcat medusa patator gdb binwalk 
+    foremost steghide libimage-exiftool-perl
 )
+
+# Special handling for Chromium on Kali/Debian
+if apt-cache show chromium &>/dev/null; then
+    CORE_DEPS+=("chromium" "chromium-driver")
+elif apt-cache show chromium-browser &>/dev/null; then
+    CORE_DEPS+=("chromium-browser" "chromium-chromedriver")
+else
+    warn "Chromium not found in repositories. Attempting to install via snap/flatpak if available..."
+fi
 
 log "Installing ${#CORE_DEPS[@]} core security tools..."
 apt install -y "${CORE_DEPS[@]}" || warn "Some core tools failed to install. Continuing..."
