@@ -1,4 +1,11 @@
-<div align="center">
+# NullSec-RedTeam-AI
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/Panda1847/NullSec-RedTeam-AI)](https://github.com/Panda1847/NullSec-RedTeam-AI/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/Panda1847/NullSec-RedTeam-AI)](https://github.com/Panda1847/NullSec-RedTeam-AI/network)
+[![GitHub issues](https://img.shields.io/github/issues/Panda1847/NullSec-RedTeam-AI)](https://github.com/Panda1847/NullSec-RedTeam-AI/issues)
+[![Language](https://img.shields.io/badge/language-Shell-blue.svg)](https://github.com/Panda1847/NullSec-RedTeam-AI)
+
   <img src="assets/nullsec_3d_banner.png" alt="NullSec Red Team AI Banner" width="100%"/>
   <p><strong>The Ultimate AI-Powered Red Team Platform: Claude Desktop + HexStrike AI + AI Security Lab</strong></p>
   <p>A single, self-contained installer for the most advanced AI-driven penetration testing and security research environment.</p>

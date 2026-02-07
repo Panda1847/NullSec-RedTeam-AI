@@ -1,0 +1,4 @@
+# Shell
+*.log
+*.tmp
+.env
