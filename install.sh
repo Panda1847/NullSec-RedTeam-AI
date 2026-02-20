@@ -51,7 +51,7 @@ error_handler() {
 # --- 1. Advanced Guardian Tool Deployment ---
 deploy_guardian() {
     log "Deploying Advanced Guardian Diagnostic & Repair Tool..."
-    cat <<'EOF' > "$GUARDIAN_PATH"
+    cat <<'EOF' > /tmp/guardian_script.py
 #!/usr/bin/env python3
 import os, sys, subprocess, json, requests, socket, re
 
@@ -145,7 +145,7 @@ if __name__ == "__main__":
             sys.exit(1)
         log("System is HEALTHY.")
 EOF
-    chmod +x "$GUARDIAN_PATH"
+    mv /tmp/guardian_script.py "$GUARDIAN_PATH" && chmod +x "$GUARDIAN_PATH"
 }
 
 # --- 2. Main Installation ---
