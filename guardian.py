@@ -1,39 +1,10 @@
 #!/usr/bin/env python3
-import os, sys, subprocess, json, requests, socket, re, random
-
-PIXEL_ART_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "pixel_art")
-
-def display_random_pixel_art():
-    if not os.path.exists(PIXEL_ART_DIR):
-        return
-    
-    images = [f for f in os.listdir(PIXEL_ART_DIR) if f.endswith(('.png', '.jpg'))]
-    if not images:
-        return
-    
-    selected_image = random.choice(images)
-    image_path = os.path.join(PIXEL_ART_DIR, selected_image)
-    
-    try:
-        # Assuming image_to_ansi.py is in a 'utils' directory relative to guardian.py
-        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "utils", "image_to_ansi.py")
-        if os.path.exists(script_path):
-            cmd = [sys.executable, script_path, image_path, "80"]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-            if result.returncode == 0:
-                print(result.stdout)
-            else:
-                log(f"Error displaying pixel art: {result.stderr}")
-        else:
-            log(f"image_to_ansi.py not found at {script_path}")
-    except Exception as e:
-        log(f"Exception while trying to display pixel art: {e}")
-
+import os, sys, subprocess, json, requests, socket, re, random, time
+from utils.core import with_pacman, self_heal, safe_run
 
 LOG_FILE = os.path.join(os.path.expanduser("~/"), ".guardian_diagnostics.log")
 if not os.path.exists(LOG_FILE):
     with open(LOG_FILE, 'w') as f: pass
-
 
 GUARDIAN_DB = {
     "externally-managed-environment": "echo 'Please use a virtual environment or \'pip install --break-system-packages\' if you understand the risks.'",
@@ -51,24 +22,18 @@ def log(msg):
     except PermissionError:
         pass
 
-def run_cmd(cmd, shell=True):
-    try:
-        result = subprocess.run(cmd, shell=shell, capture_output=True, text=True)
-        return result.returncode, result.stdout, result.stderr
-    except Exception as e: return 1, "", str(e)
-
+@self_heal(max_retries=3)
 def search_github(error_msg):
     log(f"Searching GitHub for: {error_msg}")
     query = f"hexstrike-ai OR mcp-terminal {error_msg}"
     api_url = f"https://api.github.com/search/issues?q={query}"
-    try:
-        resp = requests.get(api_url, timeout=10)
-        if resp.status_code == 200:
-            items = resp.json().get('items', [])
-            return [item['html_url'] for item in items[:3]]
-    except: pass
+    resp = requests.get(api_url, timeout=10)
+    if resp.status_code == 200:
+        items = resp.json().get('items', [])
+        return [item['html_url'] for item in items[:3]]
     return []
 
+@with_pacman("Diagnosing")
 def diagnose_and_fix(error_msg):
     log("Starting Deep Diagnosis...")
     for key, fix in GUARDIAN_DB.items():
@@ -80,7 +45,7 @@ def diagnose_and_fix(error_msg):
                 port = port_match.group(1) if port_match else "8888"
                 cmd = cmd.replace("{port}", port)
             log(f"Executing fix: {cmd}")
-            run_cmd(cmd)
+            safe_run(cmd)
             return True
     
     links = search_github(error_msg)
@@ -89,6 +54,7 @@ def diagnose_and_fix(error_msg):
         for link in links: log(f" -> {link}")
     return False
 
+@with_pacman("Checking Integrity")
 def integrity_check():
     log("Running System Integrity Check...")
     checks = [
@@ -102,13 +68,11 @@ def integrity_check():
     ]
     all_pass = True
     for cmd, name in checks:
-        rc, _, _ = run_cmd(cmd)
+        rc, _, _ = safe_run(cmd)
         status = "\033[92mPASS\033[0m" if rc == 0 else "\033[91mFAIL\033[0m"
         log(f"{name}: {status}")
         if rc != 0: all_pass = False
     return all_pass
-
-    display_random_pixel_art()
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
