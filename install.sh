@@ -55,13 +55,13 @@ deploy_guardian() {
 #!/usr/bin/env python3
 import os, sys, subprocess, json, requests, socket, re
 
-LOG_FILE = "/tmp/guardian_diagnostics.log"
+LOG_FILE = os.path.join(os.path.expanduser("~/"), ".guardian_diagnostics.log")
 if not os.path.exists(LOG_FILE):
     with open(LOG_FILE, 'w') as f: pass
-os.chmod(LOG_FILE, 0o666)
+
 
 GUARDIAN_DB = {
-    "externally-managed-environment": "pip install --break-system-packages",
+    "externally-managed-environment": "echo 'Please use a virtual environment or \'pip install --break-system-packages\' if you understand the risks.'",
     "ModuleNotFoundError: No module named 'fastmcp'": "pip install fastmcp",
     "port 8888 is already in use": "fuser -k 8888/tcp",
     "Permission denied": "chmod +x {file} && chown $USER:$USER {file}",
@@ -185,7 +185,7 @@ fi
 # Core Security Arsenal
 CORE_DEPS=(
     git python3 python3-venv python3-pip python3-requests 
-    nodejs npm curl jq lsof nmap masscan fierce dnsenum 
+    nodejs npm curl lsof nmap masscan fierce dnsenum jq 
     gobuster dirsearch ffuf dirb nikto sqlmap wafw00f 
     hydra john hashcat medusa patator gdb binwalk 
     foremost steghide libimage-exiftool-perl
@@ -239,7 +239,7 @@ fi
 
 log "Phase 2: HexStrike AI Deployment..."
 if [ ! -d "$INSTALL_DIR_HEX" ]; then
-    git clone https://github.com/0x4m4/hexstrike-ai.git "$INSTALL_DIR_HEX" || error_handler "HexStrike clone failed"
+    cp -r /home/ubuntu/NullSec-RedTeam-AI/hexstrike-ai/* "$INSTALL_DIR_HEX" || error_handler "HexStrike copy failed"
 fi
 cd "$INSTALL_DIR_HEX"
 python3 -m venv venv || error_handler "Failed to create HexStrike venv."
@@ -248,7 +248,7 @@ python3 -m venv venv || error_handler "Failed to create HexStrike venv."
 
 log "Phase 3: AI Security Lab Deployment..."
 if [ ! -d "$INSTALL_DIR_LAB" ]; then
-    git clone https://github.com/Panda1847/ai-security-lab.git "$INSTALL_DIR_LAB" || error_handler "AI Security Lab clone failed"
+    cp -r /home/ubuntu/NullSec-RedTeam-AI/ai-security-lab/* "$INSTALL_DIR_LAB" || error_handler "AI Security Lab copy failed"
 fi
 cd "$INSTALL_DIR_LAB"
 python3 -m venv venv || error_handler "Failed to create AI Security Lab venv."
@@ -261,7 +261,44 @@ TARGET_PORT=8888
 while lsof -Pi :$TARGET_PORT -sTCP:LISTEN -t >/dev/null ; do TARGET_PORT=$((TARGET_PORT + 1)); done
 
 mkdir -p "$CLAUDE_CONFIG_DIR"
-cat <<EOF > "$CLAUDE_CONFIG_FILE"
+if [ -f "$CLAUDE_CONFIG_FILE" ]; then
+        # Read existing config, update mcpServers, and write back
+        TEMP_CONFIG=$(mktemp)
+        jq ".mcpServers = $(cat <<'JSON_END'
+{
+    "hexstrike": {
+      "command": "$INSTALL_DIR_HEX/venv/bin/python3",
+      "args": ["$INSTALL_DIR_HEX/hexstrike_mcp.py", "--server", "http://localhost:$TARGET_PORT"],
+      "description": "HexStrike AI Offensive Security Toolkit (150+ tools)",
+      "timeout": 3600
+    },
+    "ai-security-lab": {
+      "command": "$INSTALL_DIR_LAB/venv/bin/python3",
+      "args": ["$INSTALL_DIR_LAB/tools/jailbreak_tester.py", "--mcp"],
+      "description": "AI Security Lab - Jailbreaks & LLM Vulnerability Scanner"
+    },
+    "terminal": { 
+      "command": "npx", 
+      "args": ["-y", "@dillip285/mcp-terminal", "--allowed-paths", "/"],
+      "description": "Full System Terminal Access"
+    },
+    "filesystem": { 
+      "command": "npx", 
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "$WORKSPACE"],
+      "description": "Red Team Lab Workspace"
+    },
+    "browser": { 
+      "command": "npx", 
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "description": "Web Browser Automation"
+    }
+}
+JSON_END
+)" "$CLAUDE_CONFIG_FILE" > "$TEMP_CONFIG"
+        mv "$TEMP_CONFIG" "$CLAUDE_CONFIG_FILE"
+    else
+        # Create new config file
+        cat <<EOF > "$CLAUDE_CONFIG_FILE"
 {
   "mcpServers": {
     "hexstrike": {
