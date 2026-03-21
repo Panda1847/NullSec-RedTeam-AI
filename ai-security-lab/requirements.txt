@@ -1,2 +1,4 @@
 requests
 fastmcp
+Pillow
+ansiart

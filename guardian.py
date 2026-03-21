@@ -1,5 +1,34 @@
 #!/usr/bin/env python3
-import os, sys, subprocess, json, requests, socket, re
+import os, sys, subprocess, json, requests, socket, re, random
+
+PIXEL_ART_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "pixel_art")
+
+def display_random_pixel_art():
+    if not os.path.exists(PIXEL_ART_DIR):
+        return
+    
+    images = [f for f in os.listdir(PIXEL_ART_DIR) if f.endswith(('.png', '.jpg'))]
+    if not images:
+        return
+    
+    selected_image = random.choice(images)
+    image_path = os.path.join(PIXEL_ART_DIR, selected_image)
+    
+    try:
+        # Assuming image_to_ansi.py is in a 'utils' directory relative to guardian.py
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "utils", "image_to_ansi.py")
+        if os.path.exists(script_path):
+            cmd = [sys.executable, script_path, image_path, "80"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                print(result.stdout)
+            else:
+                log(f"Error displaying pixel art: {result.stderr}")
+        else:
+            log(f"image_to_ansi.py not found at {script_path}")
+    except Exception as e:
+        log(f"Exception while trying to display pixel art: {e}")
+
 
 LOG_FILE = os.path.join(os.path.expanduser("~/"), ".guardian_diagnostics.log")
 if not os.path.exists(LOG_FILE):
@@ -78,6 +107,8 @@ def integrity_check():
         log(f"{name}: {status}")
         if rc != 0: all_pass = False
     return all_pass
+
+    display_random_pixel_art()
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
