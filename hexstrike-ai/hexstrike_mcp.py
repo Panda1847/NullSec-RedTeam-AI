@@ -145,7 +145,7 @@ def list_available_tools() -> str:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HexStrike AI MCP Client")
-    parser.add_index("--server", default=HEXSTRIKE_SERVER_URL, help="HexStrike server URL")
+    parser.add_argument("--server", default=HEXSTRIKE_SERVER_URL, help="HexStrike server URL")
     args = parser.parse_args()
     
     os.environ["HEXSTRIKE_SERVER_URL"] = args.server

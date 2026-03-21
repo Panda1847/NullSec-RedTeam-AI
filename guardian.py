@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import os, sys, subprocess, json, requests, socket, re
 
-LOG_FILE = "/tmp/guardian_diagnostics.log"
+LOG_FILE = os.path.join(os.path.expanduser("~/"), ".guardian_diagnostics.log")
 if not os.path.exists(LOG_FILE):
     with open(LOG_FILE, 'w') as f: pass
-os.chmod(LOG_FILE, 0o666)
+
 
 GUARDIAN_DB = {
-    "externally-managed-environment": "pip install --break-system-packages",
+    "externally-managed-environment": "echo 'Please use a virtual environment or \'pip install --break-system-packages\' if you understand the risks.'",
     "ModuleNotFoundError: No module named 'fastmcp'": "pip install fastmcp",
     "port 8888 is already in use": "fuser -k 8888/tcp",
     "Permission denied": "chmod +x {file} && chown $USER:$USER {file}",

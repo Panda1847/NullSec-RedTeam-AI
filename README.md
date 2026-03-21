@@ -36,6 +36,21 @@
 
 ## 📸 Visual Demonstration: The AI in Action
 
+### AI-Powered Visuals
+
+Here are some of the new AI-themed pixel art assets integrated into the NullSec Red Team AI suite:
+
+![AI Core Pixel Art](./assets/pixel_art/ai_core.png)
+*The central AI core, representing the intelligence backbone of NullSec Red Team AI.*
+
+![Hacker AI Pixel Art](./assets/pixel_art/hacker_ai.png)
+*A visual representation of the Hacker AI, ready to analyze and exploit vulnerabilities.*
+
+![Security Shield Pixel Art](./assets/pixel_art/security_shield.png)
+*The AI-powered security shield, symbolizing robust defense and analysis capabilities.*
+
+
+
 These screenshots demonstrate the seamless integration and powerful capabilities available to the AI agent within the Claude Desktop environment.
 
 | **AI Security Lab Configuration** | **Offensive Toolset Overview** |
