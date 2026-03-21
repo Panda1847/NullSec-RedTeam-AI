@@ -240,6 +240,7 @@ fi
 log "Phase 2: HexStrike AI Deployment..."
 if [ ! -d "$INSTALL_DIR_HEX" ]; then
     cp -r /home/ubuntu/NullSec-RedTeam-AI/hexstrike-ai/* "$INSTALL_DIR_HEX" || error_handler "HexStrike copy failed"
+    cp -r /home/ubuntu/NullSec-RedTeam-AI/utils "$INSTALL_DIR_HEX/" || error_handler "HexStrike utils copy failed"
 fi
 cd "$INSTALL_DIR_HEX"
 python3 -m venv venv || error_handler "Failed to create HexStrike venv."
@@ -249,6 +250,7 @@ python3 -m venv venv || error_handler "Failed to create HexStrike venv."
 log "Phase 3: AI Security Lab Deployment..."
 if [ ! -d "$INSTALL_DIR_LAB" ]; then
     cp -r /home/ubuntu/NullSec-RedTeam-AI/ai-security-lab/* "$INSTALL_DIR_LAB" || error_handler "AI Security Lab copy failed"
+    cp -r /home/ubuntu/NullSec-RedTeam-AI/utils "$INSTALL_DIR_LAB/" || error_handler "AI Security Lab utils copy failed"
 fi
 cd "$INSTALL_DIR_LAB"
 python3 -m venv venv || error_handler "Failed to create AI Security Lab venv."
