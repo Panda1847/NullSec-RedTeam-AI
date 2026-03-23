@@ -1,4 +1,0 @@
-requests
-fastmcp
-Pillow
-ansiart
