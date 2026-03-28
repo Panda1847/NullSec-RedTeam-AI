@@ -1,4 +1,4 @@
-# 🦅 Project: NullSec-RedTeam-AI               **A PROJECT BY PANDA1847**
+# 🦅 Project: NullSec-RedTeam-AI               A PROJECT BY PANDA1847
 ![Status](https://img.shields.io/badge/Status-Classified-red?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-gold?style=for-the-badge)
 
