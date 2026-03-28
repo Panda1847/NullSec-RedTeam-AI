@@ -142,6 +142,6 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ---
 
-**Author:** Manus AI
+**Author:** Panda1847
 **Version:** 2.1
 **Last Updated:** March 27, 2026
