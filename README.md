@@ -1,150 +1,93 @@
-# 🦅 Project: NullSec-RedTeam-AI.               <details>
-<summary><b>[CREDENTIALS_REQUIRED]</b></summary>
+# NullSec Red Team AI
 
-```brainfuck
-++++++++++[>+++++++>++++++++++>+++>+++++++>+++++++>+++>++++++++++>++++++++++>+++++++>++++++++++>+++++++>+++++++>+++++++>+++++++>+++++++>++++++>+++++>++++++>+++++++>+++<<<<<<<<<<<<<<<<<<<<-]>>>>++.>---.<<<<.>>++++.>>+.>+++++++.>.+++.<<.>>---.>>--.<<+.>-----.>+++++++.<<++.>>+++.>>--.<<---.>>--.<<---.>>+.>--.<<++++.>>---.<<--.
-![Status](https://img.shields.io/badge/Status-Classified-red?style=for-the-badge)
-![License](https://img.shields.io/badge/License-MIT-gold?style=for-the-badge)
+NullSec Red Team AI is an advanced offensive security toolkit designed to integrate seamlessly with Claude Desktop via the Model Context Protocol (MCP). It provides a unified interface for over 150+ security tools, AI-powered vulnerability scanning, and automated jailbreak testing.
 
-> **"Security is an illusion. We provide the reality check."**
+## Project Overview
 
-## 🌐 Overview
+This project bridges the gap between Large Language Models and professional security tooling. By providing Claude with direct, controlled access to a specialized security environment, it enables complex red-teaming workflows, automated reconnaissance, and intelligent payload generation.
 
-**NullSec-RedTeam-AI** is an advanced, AI-driven offensive security framework designed to bridge the gap between Large Language Models (specifically **Claude Desktop**) and raw penetration testing capabilities. By integrating custom modules for **OSINT**, **Payload Engineering**, and **Adversary Simulation**, this framework automates and streamlines complex stages of red team operations, enhancing efficiency and effectiveness.
+### Integrated Capabilities
 
-## 🛠 Integrated Capabilities
+| Component | Description |
+| :--- | :--- |
+| **HexStrike AI** | A Flask-based orchestration server managing 150+ offensive tools (Nmap, SQLMap, etc.). |
+| **AI Security Lab** | A specialized environment for testing LLM jailbreaks and scanning for model vulnerabilities. |
+| **Guardian Tool** | A diagnostic utility for system integrity checks and guided repair of the installation. |
+| **MCP Bridge** | Native integration for Claude Desktop to execute commands and manage a local workspace. |
 
-*   🧠 **AI Brain (Claude-3.5 Integration):** Leverages Claude-3.5 for real-time payload generation, logic bypass, and intelligent decision-making during engagements.
-*   🗡 **HexStrike Core:** A robust Python-based automation engine tailored for Kali Linux environments, providing a comprehensive suite of offensive security tools.
-*   📡 **OSINT Suite:** Automated intelligence gathering capabilities, integrating tools like Nmap and custom scrapers for reconnaissance.
-*   💾 **USB Forge:** Provides an integration point for ZeroDay hardware payloads, enabling advanced physical access and exploitation scenarios.
-*   🛡 **Advanced Guardian Diagnostic & Repair Tool:** A self-healing mechanism to diagnose and automatically fix common installation and runtime issues, ensuring operational continuity.
+## Installation & Deployment
 
-## 🚀 Installation & Deployment
-
-This section provides a comprehensive guide to setting up NullSec-RedTeam-AI, including prerequisites, automated installation, and manual verification steps.
+The installer is modular, allowing you to choose the level of access and components you wish to deploy.
 
 ### Prerequisites
 
-Before proceeding with the installation, ensure your system meets the following requirements:
+*   **Operating System:** Kali Linux, Debian, or Ubuntu (recommended).
+*   **Privileges:** Sudo access is required for system-wide tool installation.
+*   **Dependencies:** Python 3.10+, Node.js 18+, and Git.
 
-*   **Operating System:** Kali Linux or any Debian-based distribution is recommended.
-*   **Root Privileges:** The installation script requires `sudo` access.
-*   **Git:** For cloning the repository.
-*   **Curl & GnuPG:** For adding external repositories and managing GPG keys.
-*   **Python 3.x & pip:** Essential for Python-based modules and dependency management.
-*   **Node.js & npm/npx:** Required for certain MCP server components and utilities.
+### Automated Installation
 
-### Automated Installation (Recommended)
+Run the installer with the desired mode. By default, it installs core security tools.
 
-The `install.sh` script automates the entire setup process, including dependency installation, Claude Desktop setup (if not already present), HexStrike AI deployment, AI Security Lab deployment, and MCP orchestration.
+```bash
+# Clone the repository
+git clone https://github.com/Panda1847/NullSec-RedTeam-AI.git
+cd NullSec-RedTeam-AI
 
-1.  **Clone the Repository:**
-    ```bash
-    git clone https://github.com/Panda1847/NullSec-RedTeam-AI.git
-    cd NullSec-RedTeam-AI
-    ```
+# Run a dry-run to see planned changes
+sudo ./install.sh --dry-run --full
 
-2.  **Run the Installer Script:**
-    Execute the `install.sh` script with `sudo` privileges. This script will handle all necessary installations and configurations.
-    ```bash
-    sudo bash install.sh
-    ```
-    *The installer will check for existing installations of Claude Desktop and HexStrike and integrate them if found. It will also deploy the Guardian diagnostic tool.* 
+# Perform a full installation (Core + Desktop + MCP + Lab)
+sudo ./install.sh --full
+```
 
-3.  **Follow On-Screen Instructions:**
-    The script provides detailed output and prompts. Pay attention to any warnings or errors, although the Guardian tool is designed to attempt self-healing for common issues.
+### Installation Modes
 
-### Manual Verification (Optional)
+| Mode | Flag | Description |
+| :--- | :--- | :--- |
+| **Core** | `--core` | Installs only the 150+ security tools (apt/pip). |
+| **Desktop** | `--desktop` | Installs Claude Desktop for Linux. |
+| **MCP** | `--mcp` | Configures HexStrike MCP servers in Claude. |
+| **Lab** | `--lab` | Deploys the AI Security Lab payloads. |
+| **Full** | `--full` | Complete deployment of all components. |
 
-After the automated installation, you can manually verify the setup:
+## Security & Trust
 
-1.  **Check HexStrike Service Status:**
-    ```bash
-    systemctl status hexstrike
-    ```
-    The output should show `Active: active (running)`. If not, check the system logs for errors (`journalctl -xeu hexstrike`).
+We prioritize transparency and security in our deployment process.
 
-2.  **Verify Claude Desktop Configuration:**
-    The installer configures Claude Desktop to integrate with HexStrike and AI Security Lab via MCP. The configuration file is typically located at `~/.config/Claude/claude_desktop_config.json`. You can inspect its contents:
-    ```bash
-    cat ~/.config/Claude/claude_desktop_config.json
-    ```
-    Ensure that `hexstrike` and `ai-security-lab` entries are present under `mcpServers`.
+### Access & Permissions
 
-3.  **Run Guardian Integrity Check:**
-    The Guardian tool can perform a system integrity check to ensure all components are correctly installed and configured.
-    ```bash
-    sudo guardian
-    ```
-    Ideally, all checks should pass. If any fail, the Guardian will provide diagnostic information.
+*   **Workspace Isolation:** By default, Claude is restricted to the `~/NullSec_RedTeam_Lab` directory.
+*   **Elevated Access:** Full system access is **opt-in only** via the `--elevated` flag during installation.
+*   **Log Privacy:** Installation logs are stored at `/tmp/nullsec_install.log` with restricted permissions (600).
+*   **Reproducibility:** All MCP packages are pinned to specific versions to ensure consistent behavior.
 
-## 💡 How to Use NullSec-RedTeam-AI
+### Guardian Diagnostic Tool
 
-NullSec-RedTeam-AI is primarily designed to be operated through **Claude Desktop** via its Model Context Protocol (MCP) integration. This allows Claude-3.5 to leverage the framework's capabilities for red team operations.
+The `guardian` tool is deployed to `/usr/local/bin/guardian`. It is designed to be **read-only by default**.
 
-### 1. Launch Claude Desktop
+*   **Check Integrity:** `guardian --check`
+*   **Diagnose Issues:** `guardian "error message"`
+*   **Guided Repair:** `guardian --repair "error message"` (Requires explicit user confirmation)
 
-Start Claude Desktop from your application menu. If it's your first time, you may need to log in or configure your Claude API key.
+## Uninstallation
 
-### 2. Verify MCP Integration
+To remove NullSec Red Team AI and its configurations:
 
-Within Claude Desktop, navigate to its MCP settings (the exact location may vary based on Claude Desktop version). You should see `HexStrike AI Offensive Security Toolkit` and `AI Security Lab` listed as active MCP servers. A green status indicator typically signifies a successful connection.
+1.  **Stop Services:** `sudo systemctl stop hexstrike && sudo systemctl disable hexstrike`
+2.  **Remove Files:** `sudo rm -rf /opt/hexstrike-ai /opt/ai-security-lab /usr/local/bin/guardian`
+3.  **Clean Config:** Remove the `hexstrike`, `terminal`, and `filesystem` entries from your Claude Desktop config.
 
-### 3. Interact with Claude-3.5
+## Contributing
 
-Once integrated, you can instruct Claude-3.5 to perform various red team tasks. Claude will automatically invoke the HexStrike and AI Security Lab tools as needed based on your prompts.
+We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines on how to submit pull requests and report issues.
 
-**Examples of Prompts for Claude-3.5:**
+## License
 
-*   "Perform an OSINT reconnaissance on the domain `example.com` using Nmap and available scrapers. Provide a summary of open ports and discovered subdomains."
-*   "Generate a Python payload to exploit a common web vulnerability (e.g., SQL Injection) and test it against a simulated target. Ensure the payload is obfuscated."
-*   "Analyze the provided code snippet for potential LLM jailbreak vulnerabilities and suggest mitigation strategies."
-*   "Deploy the Guardian diagnostic tool to check the integrity of the HexStrike environment and report any issues."
-*   "Access the Red Team Lab Workspace and list its contents."
-
-### 4. Direct Tool Access (Advanced Users)
-
-While interaction through Claude Desktop is the primary method, advanced users can directly access the deployed tools:
-
-*   **HexStrike AI:** Located at `/opt/hexstrike-ai`. You can activate its Python virtual environment and run scripts directly:
-    ```bash
-    source /opt/hexstrike-ai/venv/bin/activate
-    python3 /opt/hexstrike-ai/hexstrike_mcp.py --help
-    # Deactivate the venv when done
-    deactivate
-    ```
-
-*   **AI Security Lab:** Located at `/opt/ai-security-lab`. Similarly, you can activate its virtual environment:
-    ```bash
-    source /opt/ai-security-lab/venv/bin/activate
-    python3 /opt/ai-security-lab/jailbreak_tester.py --help
-    # Deactivate the venv when done
-    deactivate
-    ```
-
-*   **Guardian Tool:** The diagnostic tool can be run from anywhere:
-    ```bash
-    sudo guardian
-    ```
-
-## ⚠️ Troubleshooting
-
-*   **Installation Failures:** If `install.sh` encounters issues, review the output for specific error messages. The Guardian tool attempts to self-heal, but some issues may require manual intervention. Check the log file at `/tmp/nullsec_install.log`.
-*   **Claude Desktop MCP Connection Issues:** Ensure the `hexstrike.service` is running (`systemctl status hexstrike`). Verify the `claude_desktop_config.json` file for correct paths and port numbers.
-*   **Permission Denied Errors:** Ensure you are running `install.sh` with `sudo`. For other operations, check file and directory permissions and use `chown` or `chmod` as necessary.
-*   **Python Dependency Issues:** If a Python module is missing, activate the respective virtual environment (`/opt/hexstrike-ai/venv/bin/activate` or `/opt/ai-security-lab/venv/bin/activate`) and install it using `pip install <module-name>`.
-
-## 🤝 Contributing
-
-We welcome contributions to NullSec-RedTeam-AI! Please refer to `CONTRIBUTING.md` for guidelines on how to submit bug reports, feature requests, and pull requests.
-
-## 📄 License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+This project is licensed under the MIT License. See [LICENSE](docs/LICENSE) for details.
 
 ---
 
-** LEAD DEVELOPER:** Panda1847
-**Verizon** 2.1
-**Last Updated:** March 27, 2026
+**Lead Developer:** Panda1847  
+**Version:** 3.0.0  
+**Last Updated:** April 3, 2026

@@ -1,74 +1,67 @@
+
 # Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
 # C extensions
-*.so
-
 # Distribution / packaging
+# Environments
+# IDE settings
+# Installer logs
+# Other
+# PyInstaller
+# Secrets
+# Unit test / coverage reports
+*$py.class
+*.cover
+*.egg
+*.egg-info/
+*.env
+*.key
+*.log
+*.manifest
+*.pem
+*.py,cover
+*.py[cod]
+*.pyc
+*.so
+*.spec
+*.tmp
+*key*
+*password*
+*token*
 .Python
+.cache
+.coverage
+.coverage.*
+.eggs/
+.env
+.hypothesis/
+.idea/
+.installed.cfg
+.nox/
+.pytest_cache/
+.tox/
+.venv
+.vscode/
+ENV/
+MANIFEST
+__pycache__/
 build/
+coverage.xml
+credentials.json
 develop-eggs/
 dist/
 downloads/
 eggs/
-.eggs/
+env/
+htmlcov/
 lib/
 lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
 nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-
-# IDE settings
-.idea/
-.vscode/
-
-# Secrets
-*key*
-*token*
-*password*
-*.env
-*.key
-*.pem
+parts/
+pip-delete-this-directory.txt
+pip-log.txt
+sdist/
 secrets.json
-credentials.json
-
-# Other
-*.log
-*.tmp
+share/python-wheels/
+var/
+venv/
+wheels/
