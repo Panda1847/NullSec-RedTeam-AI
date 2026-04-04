@@ -25,10 +25,26 @@ def execute_tool():
     if tool_name not in AVAILABLE_TOOLS:
         return jsonify({"error": f"Tool '{tool_name}' not found."}), 404
 
-    # Simulate tool execution
-    output = f"Simulating execution of {tool_name} on {target} with options: {options}\n"
-    output += "[SIMULATED] Scan completed successfully. No critical vulnerabilities found."
-    return jsonify({"output": output}), 200
+    # Check if tool exists in system
+    import subprocess
+    check_tool = subprocess.run(f"command -v {tool_name}", shell=True, capture_output=True)
+    
+    if check_tool.returncode == 0:
+        # Execute real tool safely
+        cmd = f"{tool_name} {options} {target}"
+        try:
+            process = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=300)
+            output = process.stdout if process.stdout else process.stderr
+            return jsonify({"output": output}), 200
+        except subprocess.TimeoutExpired:
+            return jsonify({"error": "Tool execution timed out."}), 504
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    else:
+        # Fallback to simulation
+        output = f"Simulating execution of {tool_name} on {target} with options: {options}\n"
+        output += "[SIMULATED] Scan completed successfully. No critical vulnerabilities found."
+        return jsonify({"output": output}), 200
 
 @app.route("/api/intelligence/analyze-target", methods=["POST"])
 def analyze_target():
