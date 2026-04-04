@@ -22,8 +22,8 @@ CLAUDE_CONFIG_FILE="$CLAUDE_CONFIG_DIR/claude_desktop_config.json"
 WORKSPACE="$REAL_HOME/NullSec_RedTeam_Lab"
 
 # Pinned Versions
-MCP_TERMINAL_VER="@dillip285/mcp-terminal@1.1.0"
-MCP_FILESYSTEM_VER="@modelcontextprotocol/server-filesystem@0.6.0"
+MCP_TERMINAL_VER="@dillip285/mcp-terminal@latest"
+MCP_FILESYSTEM_VER="@modelcontextprotocol/server-filesystem@latest"
 
 # --- Colors ---
 RED='\033[0;31m'
@@ -68,7 +68,7 @@ check_distro() {
 error_handler() {
     error "$1"
     if [ -f "$GUARDIAN_PATH" ]; then
-        log "Guardian is available for diagnostics. Run 'guardian --diagnose' for details."
+        log "Guardian is available for diagnostics. Run 'guardian --check' or 'guardian \"error message\"' for details."
     fi
     exit 1
 }
@@ -280,7 +280,7 @@ case $MODE in
             mkdir -p "$INSTALL_DIR_LAB"
             cp -r "$SCRIPT_DIR/modules/payloads/"* "$INSTALL_DIR_LAB/"
             cd "$INSTALL_DIR_LAB" && python3 -m venv venv
-            ./venv/bin/pip install requests flask
+            ./venv/bin/pip install -r requirements.txt
         else
             log "[DRY-RUN] Would deploy Lab payloads to $INSTALL_DIR_LAB"
         fi
