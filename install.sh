@@ -132,7 +132,9 @@ phase_core_tools() {
     if [ "$DRY_RUN" = true ]; then
         log "[DRY-RUN] Would install: ${CORE_DEPS[*]}"
     else
-        apt update -y && apt install -y "${CORE_DEPS[@]}" || warn "Some tools failed to install."
+        DEBIAN_FRONTEND=noninteractive apt update -y && DEBIAN_FRONTEND=noninteractive apt install -y "${CORE_DEPS[@]}" || warn "Some tools failed to install."
+        apt-get autoremove -y > /dev/null 2>&1
+        apt-get clean > /dev/null 2>&1
     fi
 }
 
