@@ -13,8 +13,16 @@ import time
 from datetime import datetime
 
 # Add parent directory to path to import utils
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.core import with_pacman, self_heal
+try:
+    from utils.core import with_pacman, self_heal
+except ImportError:
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    try:
+        from utils.core import with_pacman, self_heal
+    except ImportError:
+        # Fallback for when it's installed in /opt/hexstrike-ai
+        sys.path.append("/opt/hexstrike-ai")
+        from utils.core import with_pacman, self_heal
 
 from mcp.server.fastmcp import FastMCP
 

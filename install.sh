@@ -164,11 +164,12 @@ phase_hexstrike_deploy() {
         mkdir -p "$INSTALL_DIR_HEX/utils"
         cp "$SCRIPT_DIR/utils/core.py" "$INSTALL_DIR_HEX/utils/"
         touch "$INSTALL_DIR_HEX/utils/__init__.py"
+        chown -R "$REAL_USER":"$REAL_USER" "$INSTALL_DIR_HEX"
         
         cd "$INSTALL_DIR_HEX"
-        python3 -m venv venv
-        ./venv/bin/pip install --upgrade pip
-        ./venv/bin/pip install -r requirements.txt || error_handler "HexStrike deps failed."
+        sudo -u "$REAL_USER" python3 -m venv venv
+        sudo -u "$REAL_USER" ./venv/bin/pip install --upgrade pip
+        sudo -u "$REAL_USER" ./venv/bin/pip install -r requirements.txt || error_handler "HexStrike deps failed."
     fi
 }
 
@@ -193,6 +194,12 @@ phase_mcp_config() {
     fi
 
     # Robust JQ Merge
+    # Ensure TARGET_PORT is set if not already (e.g. if phase_mcp_config is called directly)
+    if [ -z "$TARGET_PORT" ]; then
+        TARGET_PORT=8888
+        while lsof -Pi :$TARGET_PORT -sTCP:LISTEN -t >/dev/null ; do TARGET_PORT=$((TARGET_PORT + 1)); done
+    fi
+
     jq --arg hex_cmd "$INSTALL_DIR_HEX/venv/bin/python3" \
        --arg hex_script "$INSTALL_DIR_HEX/hexstrike_mcp.py" \
        --arg hex_url "http://localhost:$TARGET_PORT" \
@@ -226,6 +233,12 @@ phase_systemd() {
         error_handler "HexStrike deployment incomplete. Cannot start service."
     fi
 
+    # Ensure TARGET_PORT is set
+    if [ -z "$TARGET_PORT" ]; then
+        TARGET_PORT=8888
+        while lsof -Pi :$TARGET_PORT -sTCP:LISTEN -t >/dev/null ; do TARGET_PORT=$((TARGET_PORT + 1)); done
+    fi
+
     cat <<EOF > /etc/systemd/system/hexstrike.service
 [Unit]
 Description=HexStrike AI Flask Server
@@ -254,9 +267,14 @@ phase_guardian_deploy() {
     else
         cp "$SCRIPT_DIR/modules/brain/guardian.py" "$GUARDIAN_PATH"
         chmod +x "$GUARDIAN_PATH"
+        # Ensure utils is available for guardian
         mkdir -p /usr/local/bin/utils
         cp "$SCRIPT_DIR/utils/core.py" /usr/local/bin/utils/
         touch /usr/local/bin/utils/__init__.py
+        # Also copy to a place where it can be imported if /usr/local/bin is not in path
+        mkdir -p /usr/local/lib/python3/dist-packages/nullsec_utils
+        cp "$SCRIPT_DIR/utils/core.py" /usr/local/lib/python3/dist-packages/nullsec_utils/core.py
+        touch /usr/local/lib/python3/dist-packages/nullsec_utils/__init__.py
     fi
 }
 
