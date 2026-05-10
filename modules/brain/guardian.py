@@ -5,18 +5,21 @@ import os, sys, subprocess, json, requests, socket, re, random, time, argparse
 try:
     from utils.core import with_pacman, self_heal, safe_run
 except ImportError:
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    sys.path.append("/usr/local/bin")
     try:
-        from utils.core import with_pacman, self_heal, safe_run
+        from nullsec_utils.core import with_pacman, self_heal, safe_run
     except ImportError:
-        def with_pacman(msg): return lambda f: f
-        def self_heal(**kwargs): return lambda f: f
-        def safe_run(cmd, **kwargs):
-            try:
-                r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-                return r.returncode, r.stdout, r.stderr
-            except Exception as e: return 1, "", str(e)
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        sys.path.append("/usr/local/bin")
+        try:
+            from utils.core import with_pacman, self_heal, safe_run
+        except ImportError:
+            def with_pacman(msg): return lambda f: f
+            def self_heal(**kwargs): return lambda f: f
+            def safe_run(cmd, **kwargs):
+                try:
+                    r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                    return r.returncode, r.stdout, r.stderr
+                except Exception as e: return 1, "", str(e)
 
 LOG_FILE = os.path.join(os.path.expanduser("~"), ".guardian_diagnostics.log")
 
