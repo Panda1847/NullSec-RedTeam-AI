@@ -11,12 +11,30 @@
 
 # --- Configuration ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTALL_DIR_HEX="/opt/hexstrike-ai"
-INSTALL_DIR_LAB="/opt/ai-security-lab"
-GUARDIAN_PATH="/usr/local/bin/guardian"
+# Use /opt if writable, otherwise fallback to home directory
+if [ -w "/opt" ]; then
+    INSTALL_DIR_HEX="/opt/hexstrike-ai"
+    INSTALL_DIR_LAB="/opt/ai-security-lab"
+else
+    INSTALL_DIR_HEX="$REAL_HOME/opt/hexstrike-ai"
+    INSTALL_DIR_LAB="$REAL_HOME/opt/ai-security-lab"
+fi
+
+if [ -w "/usr/local/bin" ]; then
+    GUARDIAN_PATH="/usr/local/bin/guardian"
+else
+    GUARDIAN_PATH="$REAL_HOME/bin/guardian"
+fi
+
+# Ensure log file is writable
 LOG_FILE="/tmp/nullsec_install.log"
+touch "$LOG_FILE" 2>/dev/null || LOG_FILE="$REAL_HOME/nullsec_install.log"
 REAL_USER=${SUDO_USER:-$USER}
 REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+# Fallback for REAL_HOME if getent fails
+if [ -z "$REAL_HOME" ]; then
+    REAL_HOME="/home/$REAL_USER"
+fi
 CLAUDE_CONFIG_DIR="$REAL_HOME/.config/Claude"
 CLAUDE_CONFIG_FILE="$CLAUDE_CONFIG_DIR/claude_desktop_config.json"
 WORKSPACE="$REAL_HOME/NullSec_RedTeam_Lab"
@@ -42,8 +60,9 @@ ELEVATED_OPT_IN=false
 # --- Logging ---
 setup_logging() {
     if [ "$DRY_RUN" = false ]; then
+        touch "$LOG_FILE" 2>/dev/null || LOG_FILE="$REAL_HOME/nullsec_install.log"
         touch "$LOG_FILE"
-        chmod 600 "$LOG_FILE"
+        chmod 666 "$LOG_FILE"
         chown "$REAL_USER":"$REAL_USER" "$LOG_FILE" 2>/dev/null || true
     fi
 }
@@ -169,7 +188,12 @@ phase_hexstrike_deploy() {
         cd "$INSTALL_DIR_HEX"
         sudo -u "$REAL_USER" python3 -m venv venv
         sudo -u "$REAL_USER" ./venv/bin/pip install --upgrade pip
-        sudo -u "$REAL_USER" ./venv/bin/pip install -r requirements.txt || error_handler "HexStrike deps failed."
+        # Try to install dependencies, with a fallback for Pillow if it fails to build
+        sudo -u "$REAL_USER" ./venv/bin/pip install -r requirements.txt || {
+            warn "Standard dependency install failed. Attempting fallback..."
+            sudo -u "$REAL_USER" ./venv/bin/pip install Flask requests fastmcp ansiart
+            sudo -u "$REAL_USER" ./venv/bin/pip install Pillow || warn "Pillow failed to install. Some visual features may be disabled."
+        }
     fi
 }
 
@@ -265,16 +289,21 @@ phase_guardian_deploy() {
     if [ "$DRY_RUN" = true ]; then
         log "[DRY-RUN] Would deploy guardian.py to $GUARDIAN_PATH"
     else
+        mkdir -p "$(dirname "$GUARDIAN_PATH")"
         cp "$SCRIPT_DIR/modules/brain/guardian.py" "$GUARDIAN_PATH"
         chmod +x "$GUARDIAN_PATH"
-        # Ensure utils is available for guardian
-        mkdir -p /usr/local/bin/utils
-        cp "$SCRIPT_DIR/utils/core.py" /usr/local/bin/utils/
-        touch /usr/local/bin/utils/__init__.py
-        # Also copy to a place where it can be imported if /usr/local/bin is not in path
-        mkdir -p /usr/local/lib/python3/dist-packages/nullsec_utils
-        cp "$SCRIPT_DIR/utils/core.py" /usr/local/lib/python3/dist-packages/nullsec_utils/core.py
-        touch /usr/local/lib/python3/dist-packages/nullsec_utils/__init__.py
+        
+        # Ensure utils is available for guardian in the same directory
+        mkdir -p "$(dirname "$GUARDIAN_PATH")/utils"
+        cp "$SCRIPT_DIR/utils/core.py" "$(dirname "$GUARDIAN_PATH")/utils/"
+        touch "$(dirname "$GUARDIAN_PATH")/utils/__init__.py"
+
+        # System-wide fallback if possible
+        if [ -w "/usr/local/lib/python3/dist-packages" ]; then
+            mkdir -p /usr/local/lib/python3/dist-packages/nullsec_utils
+            cp "$SCRIPT_DIR/utils/core.py" /usr/local/lib/python3/dist-packages/nullsec_utils/core.py
+            touch /usr/local/lib/python3/dist-packages/nullsec_utils/__init__.py
+        fi
     fi
 }
 
