@@ -14,9 +14,19 @@ import requests
 import time
 import random
 
-# Add parent directory to path to import utils
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from utils.core import with_pacman, self_heal
+# Robust import for utils.core
+try:
+    from utils.core import with_pacman, self_heal
+except ImportError:
+    # Fallback for when it's installed in /opt/ai-security-lab
+    sys.path.append("/opt/ai-security-lab")
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    try:
+        from utils.core import with_pacman, self_heal
+    except ImportError:
+        # Final fallback: no-op decorators
+        def with_pacman(msg): return lambda f: f
+        def self_heal(**kwargs): return lambda f: f
 
 from mcp.server.fastmcp import FastMCP
 

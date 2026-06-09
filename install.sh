@@ -60,10 +60,14 @@ ELEVATED_OPT_IN=false
 # --- Logging ---
 setup_logging() {
     if [ "$DRY_RUN" = false ]; then
+        # Ensure log file is writable by everyone to avoid permission denied
         touch "$LOG_FILE" 2>/dev/null || LOG_FILE="$REAL_HOME/nullsec_install.log"
         touch "$LOG_FILE"
         chmod 666 "$LOG_FILE"
-        chown "$REAL_USER":"$REAL_USER" "$LOG_FILE" 2>/dev/null || true
+        # Only chown if we are root
+        if [ "$EUID" -eq 0 ]; then
+            chown "$REAL_USER":"$REAL_USER" "$LOG_FILE" 2>/dev/null || true
+        fi
     fi
 }
 
@@ -328,8 +332,15 @@ case $MODE in
         if [ "$DRY_RUN" = false ]; then
             mkdir -p "$INSTALL_DIR_LAB"
             cp -r "$SCRIPT_DIR/modules/payloads/"* "$INSTALL_DIR_LAB/"
-            cd "$INSTALL_DIR_LAB" && python3 -m venv venv
-            ./venv/bin/pip install -r requirements.txt
+            # Also copy utils to lab dir for imports
+            mkdir -p "$INSTALL_DIR_LAB/utils"
+            cp "$SCRIPT_DIR/utils/core.py" "$INSTALL_DIR_LAB/utils/"
+            touch "$INSTALL_DIR_LAB/utils/__init__.py"
+            
+            cd "$INSTALL_DIR_LAB"
+            python3 -m venv venv
+            ./venv/bin/pip install --upgrade pip
+            ./venv/bin/pip install -r requirements.txt || warn "Lab deps failed."
         else
             log "[DRY-RUN] Would deploy Lab payloads to $INSTALL_DIR_LAB"
         fi

@@ -91,8 +91,8 @@ def integrity_check():
         ("git --version", "Git"),
         ("command -v claude-desktop || test -f /usr/bin/claude-desktop", "Claude Desktop"),
         ("systemctl is-active hexstrike", "HexStrike Service"),
-        ("test -d /opt/hexstrike-ai", "HexStrike Directory"),
-        ("test -d /opt/ai-security-lab", "AI Security Lab Directory")
+        ("test -d /opt/hexstrike-ai || test -d $HOME/opt/hexstrike-ai", "HexStrike Directory"),
+        ("test -d /opt/ai-security-lab || test -d $HOME/opt/ai-security-lab", "AI Security Lab Directory")
     ]
     all_pass = True
     for cmd, name in checks:
