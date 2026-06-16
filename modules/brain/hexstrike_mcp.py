@@ -12,19 +12,34 @@ import requests
 import time
 from datetime import datetime
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 # Add parent directory to path to import utils
 try:
+    # Attempt direct import first
     from utils.core import with_pacman, self_heal
 except ImportError:
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     try:
-        from utils.core import with_pacman, self_heal
+        # Fallback for common deployment scenarios (e.g., installed in /opt/hexstrike-ai)
+        sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'utils'))
+        from core import with_pacman, self_heal
     except ImportError:
-        # Fallback for when it's installed in /opt/hexstrike-ai
-        sys.path.append("/opt/hexstrike-ai")
-        from utils.core import with_pacman, self_heal
+        try:
+            # Another fallback for when utils might be directly in /opt/hexstrike-ai
+            sys.path.append("/opt/hexstrike-ai/utils")
+            from core import with_pacman, self_heal
+        except ImportError:
+            logging.warning("Could not import utils.core. Proceeding with dummy functions.")
+            # Dummy functions if import fails completely
+            def with_pacman(msg): return lambda f: f
+            def self_heal(**kwargs): return lambda f: f
 
-from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError:
+    logging.error("FastMCP not found. Please ensure it is installed (pip install fastmcp).")
+    sys.exit(1)
 
 class HexStrikeColors:
     RED = '\033[91m'
@@ -60,12 +75,23 @@ def run_security_tool(tool_name: str, target: str, options: str = "") -> str:
         "options": options
     }
     
-    response = requests.post(url, json=payload, timeout=3600)
-    if response.status_code == 200:
+    try:
+        response = requests.post(url, json=payload, timeout=3600)
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
         result = response.json()
-        return f"Tool: {tool_name}\nOutput:\n{result.get('output', 'No output')}"
-    else:
-        return f"Error: Server returned status code {response.status_code}\n{response.text}"
+        return f"Tool: {tool_name}\nOutput:\n{result.get(\'output\', \'No output\')}"
+    except requests.exceptions.Timeout:
+        logging.error(f"Request to {url} timed out after 3600 seconds.")
+        return f"Error: Request timed out for tool {tool_name}."
+    except requests.exceptions.ConnectionError as e:
+        logging.error(f"Connection error to HexStrike server at {url}: {e}")
+        return f"Error: Could not connect to HexStrike server. Is it running? ({e})"
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"HTTP error during tool execution: {e} - {e.response.text}")
+        return f"Error: Server returned an HTTP error for tool {tool_name}: {e.response.status_code} - {e.response.text}"
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during tool execution: {e}")
+        return f"Error: An unexpected error occurred: {e}"
 
 @mcp.tool()
 @self_heal(max_retries=3)
@@ -80,12 +106,23 @@ def analyze_target(target: str, analysis_type: str = "comprehensive") -> str:
         "analysis_type": analysis_type
     }
     
-    response = requests.post(url, json=payload, timeout=300)
-    if response.status_code == 200:
+    try:
+        response = requests.post(url, json=payload, timeout=300)
+        response.raise_for_status()
         result = response.json()
-        return f"Analysis Results for {target}:\n{result.get('analysis', 'No analysis provided')}"
-    else:
-        return f"Error: Server returned status code {response.status_code}\n{response.text}"
+        return f"Analysis Results for {target}:\n{result.get(\'analysis\', \'No analysis provided\')}"
+    except requests.exceptions.Timeout:
+        logging.error(f"Request to {url} timed out after 300 seconds.")
+        return f"Error: Request timed out for analysis of {target}."
+    except requests.exceptions.ConnectionError as e:
+        logging.error(f"Connection error to HexStrike server at {url}: {e}")
+        return f"Error: Could not connect to HexStrike server for analysis. Is it running? ({e})"
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"HTTP error during target analysis: {e} - {e.response.text}")
+        return f"Error: Server returned an HTTP error for analysis of {target}: {e.response.status_code} - {e.response.text}"
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during target analysis: {e}")
+        return f"Error: An unexpected error occurred during analysis: {e}"
 
 @mcp.tool()
 @self_heal(max_retries=3)
@@ -94,12 +131,23 @@ def list_available_tools() -> str:
     """List all available security tools in the HexStrike arsenal."""
     url = f"{get_server_url()}/api/tools/list"
     
-    response = requests.get(url, timeout=30)
-    if response.status_code == 200:
-        tools = response.json().get('tools', [])
+    try:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        tools = response.json().get(\'tools\', [])
         return "Available Tools:\n" + "\n".join([f"- {t}" for t in tools])
-    else:
-        return f"Error: Server returned status code {response.status_code}"
+    except requests.exceptions.Timeout:
+        logging.error(f"Request to {url} timed out after 30 seconds.")
+        return "Error: Request timed out while listing tools."
+    except requests.exceptions.ConnectionError as e:
+        logging.error(f"Connection error to HexStrike server at {url}: {e}")
+        return f"Error: Could not connect to HexStrike server to list tools. Is it running? ({e})"
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"HTTP error during tool listing: {e} - {e.response.text}")
+        return f"Error: Server returned an HTTP error while listing tools: {e.response.status_code} - {e.response.text}"
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during tool listing: {e}")
+        return f"Error: An unexpected error occurred while listing tools: {e}"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="HexStrike AI MCP Client")
@@ -107,4 +155,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     os.environ["HEXSTRIKE_SERVER_URL"] = args.server
-    mcp.run()
+    try:
+        mcp.run()
+    except Exception as e:
+        logging.critical(f"Failed to start HexStrike MCP server: {e}")
+        sys.exit(1)

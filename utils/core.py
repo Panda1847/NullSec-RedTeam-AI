@@ -8,6 +8,9 @@ import os
 import functools
 import traceback
 
+# Configure logging for core utilities
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 # --- BlackArch Style Pacman Animation ---
 
 class PacmanLoading:
@@ -74,8 +77,8 @@ def self_heal(max_retries=3, delay=2):
                 except Exception as e:
                     retries += 1
                     error_msg = str(e)
-                    print(f"\n\033[91m[CRASH DETECTED]\033[0m {func.__name__} failed: {error_msg}")
-                    print(f"\033[94m[GUARDIAN]\033[0m Attempting self-healing (Retry {retries}/{max_retries})...")
+                    logging.error(f"[CRASH DETECTED] {func.__name__} failed: {error_msg}")
+                    logging.info(f"[GUARDIAN] Attempting self-healing (Retry {retries}/{max_retries})...")
                     
                     # Basic auto-fixes based on error message
                     if "port" in error_msg.lower() and "already in use" in error_msg.lower():
@@ -83,13 +86,15 @@ def self_heal(max_retries=3, delay=2):
                         port_match = re.search(r'port (\d+)', error_msg)
                         port = port_match.group(1) if port_match else "8888"
                         subprocess.run(f"fuser -k {port}/tcp", shell=True, capture_output=True)
+                        logging.info(f"[GUARDIAN] Attempted to kill process on port {port}.")
                     elif "ModuleNotFoundError" in error_msg:
                         module = error_msg.split("'")[1]
+                        logging.warning(f"[GUARDIAN] Attempting to install missing module: {module}")
                         subprocess.run([sys.executable, "-m", "pip", "install", module], capture_output=True)
                     
                     time.sleep(delay)
             
-            print(f"\033[91m[FATAL]\033[0m {func.__name__} failed after {max_retries} retries.")
+            logging.critical(f"[FATAL] {func.__name__} failed after {max_retries} retries.")
             traceback.print_exc()
             return None
         return wrapper
@@ -105,8 +110,14 @@ def safe_run(cmd, shell=True, timeout=None):
             text=True, 
             timeout=timeout
         )
+        if result.returncode != 0:
+            logging.error(f"Command failed with exit code {result.returncode}: {cmd}")
+            logging.error(f"Stdout: {result.stdout}")
+            logging.error(f"Stderr: {result.stderr}")
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
+        logging.error(f"Command timed out after {timeout} seconds: {cmd}")
         return -1, "", "Command timed out"
     except Exception as e:
+        logging.error(f"An unexpected error occurred while running command '{cmd}': {e}")
         return 1, "", str(e)
