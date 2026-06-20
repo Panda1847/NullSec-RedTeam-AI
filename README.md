@@ -17,7 +17,7 @@ This project bridges the gap between Large Language Models and professional secu
 
 ## Installation & Deployment
 
-The installer is modular, allowing you to choose the level of access and components you wish to deploy.
+The installer is now unified and hardened, providing a single entry point for a full, secure deployment.
 
 ### Prerequisites
 
@@ -38,7 +38,7 @@ cd NullSec-RedTeam-AI
 sudo ./install.sh --dry-run --full
 
 # Perform a full installation (Core + Desktop + MCP + Lab)
-sudo ./install.sh --full
+sudo ./install.sh
 ```
 
 ### Installation Modes
