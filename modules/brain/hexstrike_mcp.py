@@ -4,16 +4,26 @@ import os
 import logging
 import requests
 from typing import Optional
-from mcp.server.fastmcp import FastMCP
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    stream=sys.stderr
-)
+# Try to import FastMCP and provide a lightweight fallback if it's not installed
+try:
+    from mcp.server.fastmcp import FastMCP
+except Exception:
+    FastMCP = None
+    logging.error("fastmcp import failed: 'fastmcp' is not installed or importable. Install with `pip install fastmcp`.")
 
-mcp = FastMCP("NullSec Red Team")
+# Lightweight dummy MCP implementation so module can be imported without crashing
+if FastMCP is not None:
+    mcp = FastMCP("NullSec Red Team")
+else:
+    class _DummyMCP:
+        def tool(self, *args, **kwargs):
+            def decorator(f):
+                return f
+            return decorator
+        def run(self):
+            logging.error("fastmcp not installed: MCP server will not run. Install fastmcp to enable MCP functionality.")
+    mcp = _DummyMCP()
 
 HEXSTRIKE_SERVER_URL = os.environ.get("HEXSTRIKE_SERVER_URL", "http://localhost:8888")
 
@@ -43,6 +53,7 @@ def run_security_tool(tool_name: str, target: str, options: str = "") -> str:
     except requests.exceptions.ConnectionError:
         return "Error: Could not connect to HexStrike Server. Ensure the service is running (`systemctl status hexstrike`)."
     except Exception as e:
+        logging.exception("Error during tool execution via MCP")
         return f"Error during tool execution: {str(e)}"
 
 @mcp.tool()
