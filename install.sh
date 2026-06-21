@@ -11,7 +11,7 @@ VENV_PATH="$INSTALL_DIR/venv"
 LOG_DIR="/var/log/nullsec"
 LOG_FILE="$LOG_DIR/install.log"
 REAL_USER="${SUDO_USER:-$USER}"
-REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6 || echo "/home/$REAL_USER")
 
 # Colors
 RED='\033[0;31m'
@@ -32,7 +32,7 @@ setup_env() {
     mkdir -p "$INSTALL_DIR" "$LOG_DIR"
     touch "$LOG_FILE"
     chmod 755 "$LOG_DIR"
-    chmod 644 "$LOG_FILE"
+    chmod 600 "$LOG_FILE"
 }
 
 fix_system_deps() {
@@ -41,7 +41,7 @@ fix_system_deps() {
     apt-get --fix-broken install -y
     apt-get install -y ffmpeg curl git python3-pip python3-venv build-essential \
         libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
-        nmap sqlmap gobuster dirsearch ffuf nikto hydra john hashcat
+        nmap sqlmap gobuster dirsearch ffuf nikto hydra john hashcat rsync
 }
 
 install_claude_desktop() {
@@ -57,7 +57,8 @@ install_claude_desktop() {
 
 install_hexstrike_core() {
     log "Installing HexStrike Core..."
-    cp -r . "$INSTALL_DIR/"
+    # Use rsync to preserve permissions and avoid copying .git
+    rsync -a --delete --exclude='.git' ./ "$INSTALL_DIR/"
     cd "$INSTALL_DIR"
     
     python3 -m venv "$VENV_PATH"
