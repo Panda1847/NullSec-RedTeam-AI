@@ -1,10 +1,10 @@
 # NullSec Red Team AI
 
-NullSec Red Team AI is an advanced offensive security toolkit designed to integrate seamlessly with Claude Desktop via the Model Context Protocol (MCP). It provides a unified interface for over 150+ security tools, AI-powered vulnerability scanning, and automated jailbreak testing.
+NullSec Red Team AI is an advanced offensive security toolkit designed to integrate seamlessly with Claude Desktop via the Model Context Protocol (MCP). It provides a unified interface for over 150+ professional penetration testing tools and a controlled environment for AI-driven security testing.
 
 ## Project Overview
 
-This project bridges the gap between Large Language Models and professional security tooling. By providing Claude with direct, controlled access to a specialized security environment, it enables complex red-teaming workflows, automated reconnaissance, and intelligent payload generation.
+This project bridges the gap between Large Language Models and professional security tooling. By providing Claude with direct, controlled access to a specialized security environment, it enables collaborative workflows for reconnaissance, exploitation simulation, and model safety testing.
 
 ### Integrated Capabilities
 
@@ -59,7 +59,7 @@ We prioritize transparency and security in our deployment process.
 
 *   **Workspace Isolation:** By default, Claude is restricted to the `~/NullSec_RedTeam_Lab` directory.
 *   **Elevated Access:** Full system access is **opt-in only** via the `--elevated` flag during installation.
-*   **Log Privacy:** Installation logs are stored at `/tmp/nullsec_install.log` with restricted permissions (600).
+*   **Log Privacy:** Installation logs are stored at `/var/log/nullsec/install.log` with restricted permissions (600).
 *   **Reproducibility:** All MCP packages are pinned to specific versions to ensure consistent behavior.
 
 ### Guardian Diagnostic Tool
@@ -70,12 +70,43 @@ The `guardian` tool is deployed to `/usr/local/bin/guardian`. It is designed to 
 *   **Diagnose Issues:** `guardian "error message"`
 *   **Guided Repair:** `guardian --repair "error message"` (Requires explicit user confirmation)
 
+## Troubleshooting
+
+If you encounter problems after installation, here are quick checks:
+
+- Check service status and restart:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart hexstrike
+sudo systemctl status hexstrike
+```
+
+- View logs (installer and server):
+
+```bash
+sudo tail -n 200 /var/log/nullsec/install.log
+sudo tail -n 200 /var/log/nullsec/server.log
+```
+
+- Validate the HTTP health endpoint (should return JSON):
+
+```bash
+curl -sS http://localhost:8888/health
+```
+
+- If MCP features are not available due to missing dependency, install fastmcp inside the virtualenv:
+
+```bash
+/opt/nullsec/venv/bin/pip install fastmcp
+```
+
 ## Uninstallation
 
 To remove NullSec Red Team AI and its configurations:
 
 1.  **Stop Services:** `sudo systemctl stop hexstrike && sudo systemctl disable hexstrike`
-2.  **Remove Files:** `sudo rm -rf /opt/hexstrike-ai /opt/ai-security-lab /usr/local/bin/guardian`
+2.  **Remove Files:** `sudo rm -rf /opt/nullsec /usr/local/bin/guardian`
 3.  **Clean Config:** Remove the `hexstrike`, `terminal`, and `filesystem` entries from your Claude Desktop config.
 
 ## Contributing
