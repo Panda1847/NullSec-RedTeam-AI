@@ -1,0 +1,23 @@
+[Unit]
+Description=HexStrike Worker Service
+After=network.target
+
+[Service]
+Type=simple
+User=hexstrike
+Group=hexstrike
+WorkingDirectory=/opt/nullsec
+ExecStart=/opt/nullsec/venv/bin/python3 modules/worker/worker.py
+Restart=always
+RestartSec=5
+MemoryMax=512M
+CPUQuota=50%
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+StandardOutput=append:/var/log/nullsec/worker.log
+StandardError=append:/var/log/nullsec/worker.log
+
+[Install]
+WantedBy=multi-user.target
