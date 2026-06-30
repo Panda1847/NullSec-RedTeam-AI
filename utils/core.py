@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  NullSec Core Utilities v6.0                                                  ║
+║  Decorators, animations, and safe execution primitives                         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+"""
+
 import sys
 import time
 import threading
@@ -7,31 +15,29 @@ import logging
 import os
 import functools
 import traceback
+import re
+from typing import Callable, Any, Optional
 
-# Configure logging for core utilities
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# ─── Logger ──────────────────────────────────────────────────────────────────
+logger = logging.getLogger("nullsec.core")
 
-# --- BlackArch Style Pacman Animation ---
-
+# ─── Pacman Animation ────────────────────────────────────────────────────────
 class PacmanLoading:
-    def __init__(self, message="Loading", delay=0.1):
+    """BlackArch-style pacman loading animation."""
+
+    FRAMES = [
+        "C . . .", "c . . .", " C . .", " c . .",
+        " C .", " c .", " C", " c",
+    ]
+
+    def __init__(self, message: str = "Loading", delay: float = 0.1):
         self.message = message
         self.delay = delay
         self.running = False
-        self.thread = None
-        self.frames = [
-            "C . . .",
-            "c . . .",
-            "  C . .",
-            "  c . .",
-            "    C .",
-            "    c .",
-            "      C",
-            "      c",
-        ]
+        self.thread: Optional[threading.Thread] = None
 
     def _animate(self):
-        for frame in itertools.cycle(self.frames):
+        for frame in itertools.cycle(self.FRAMES):
             if not self.running:
                 break
             sys.stdout.write(f"\r\033[93m{frame}\033[0m \033[1m{self.message}...\033[0m")
@@ -42,82 +48,177 @@ class PacmanLoading:
 
     def start(self):
         self.running = True
-        self.thread = threading.Thread(target=self._animate)
-        self.thread.daemon = True
+        self.thread = threading.Thread(target=self._animate, daemon=True)
         self.thread.start()
 
     def stop(self):
         self.running = False
         if self.thread:
-            self.thread.join()
+            self.thread.join(timeout=1.0)
 
-def with_pacman(message="Processing"):
-    def decorator(func):
+def with_pacman(message: str = "Processing"):
+    """Decorator that shows pacman animation during function execution."""
+    def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             loader = PacmanLoading(message)
             loader.start()
             try:
                 return func(*args, **kwargs)
+            except Exception as e:
+                logger.error(f"{func.__name__} failed: {e}")
+                raise
             finally:
                 loader.stop()
         return wrapper
     return decorator
 
-# --- Self-Healing & Crash Prevention ---
-
-def self_heal(max_retries=3, delay=2):
-    def decorator(func):
+# ─── Self-Healing Decorator ──────────────────────────────────────────────────
+def self_heal(max_retries: int = 3, delay: float = 2.0, backoff: float = 2.0):
+    """
+    Decorator that auto-retries failed functions with exponential backoff.
+    Attempts basic fixes for common errors.
+    """
+    def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             retries = 0
+            current_delay = delay
+
             while retries < max_retries:
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
                     retries += 1
                     error_msg = str(e)
-                    logging.error(f"[CRASH DETECTED] {func.__name__} failed: {error_msg}")
-                    logging.info(f"[GUARDIAN] Attempting self-healing (Retry {retries}/{max_retries})...")
-                    
-                    # Basic auto-fixes based on error message
-                    if "port" in error_msg.lower() and "already in use" in error_msg.lower():
-                        import re
-                        port_match = re.search(r'port (\d+)', error_msg)
-                        port = port_match.group(1) if port_match else "8888"
-                        subprocess.run(f"fuser -k {port}/tcp", shell=True, capture_output=True)
-                        logging.info(f"[GUARDIAN] Attempted to kill process on port {port}.")
-                    elif "ModuleNotFoundError" in error_msg:
-                        module = error_msg.split("'")[1]
-                        logging.warning(f"[GUARDIAN] Attempting to install missing module: {module}")
-                        subprocess.run([sys.executable, "-m", "pip", "install", module], capture_output=True)
-                    
-                    time.sleep(delay)
-            
-            logging.critical(f"[FATAL] {func.__name__} failed after {max_retries} retries.")
-            traceback.print_exc()
+                    logger.error(f"[CRASH] {func.__name__} failed: {error_msg}")
+
+                    if retries >= max_retries:
+                        logger.critical(f"[FATAL] {func.__name__} failed after {max_retries} retries")
+                        traceback.print_exc()
+                        raise
+
+                    # Auto-fix attempts
+                    fixed = False
+
+                    # Port in use
+                    if "port" in error_msg.lower() and "in use" in error_msg.lower():
+                        match = re.search(r'port (\d+)', error_msg)
+                        port = match.group(1) if match else "8888"
+                        logger.info(f"[GUARDIAN] Attempting to free port {port}")
+                        subprocess.run(["fuser", "-k", f"{port}/tcp"], 
+                                     capture_output=True, timeout=5)
+                        fixed = True
+
+                    # Missing module
+                    elif "ModuleNotFoundError" in error_msg or "No module named" in error_msg:
+                        match = re.search(r"'([^']+)'", error_msg)
+                        module = match.group(1) if match else None
+                        if module:
+                            logger.info(f"[GUARDIAN] Installing missing module: {module}")
+                            subprocess.run([sys.executable, "-m", "pip", "install", module],
+                                         capture_output=True, timeout=60)
+                            fixed = True
+
+                    # Permission denied
+                    elif "permission denied" in error_msg.lower():
+                        logger.warning("[GUARDIAN] Permission denied. Try running with sudo.")
+
+                    if fixed:
+                        logger.info(f"[GUARDIAN] Retry {retries}/{max_retries} in {current_delay}s...")
+                    else:
+                        logger.info(f"[GUARDIAN] Retry {retries}/{max_retries} in {current_delay}s...")
+
+                    time.sleep(current_delay)
+                    current_delay *= backoff
+
             return None
         return wrapper
     return decorator
 
-def safe_run(cmd, shell=True, timeout=None):
-    """Run a command safely with timeout and error handling."""
+# ─── Safe Command Execution ──────────────────────────────────────────────────
+def safe_run(cmd: str, shell: bool = False, timeout: Optional[int] = 30,
+             cwd: Optional[str] = None, env: Optional[dict] = None) -> tuple[int, str, str]:
+    """
+    Safely execute a command with timeout and error handling.
+
+    Args:
+        cmd: Command string or list
+        shell: Whether to use shell execution (default: False for security)
+        timeout: Maximum execution time in seconds
+        cwd: Working directory
+        env: Environment variables
+
+    Returns:
+        (return_code, stdout, stderr)
+    """
     try:
         result = subprocess.run(
-            cmd, 
-            shell=shell, 
-            capture_output=True, 
-            text=True, 
-            timeout=timeout
+            cmd,
+            shell=shell,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=cwd,
+            env=env
         )
+
         if result.returncode != 0:
-            logging.error(f"Command failed with exit code {result.returncode}: {cmd}")
-            logging.error(f"Stdout: {result.stdout}")
-            logging.error(f"Stderr: {result.stderr}")
+            logger.warning(f"Command exited {result.returncode}: {cmd}")
+            if result.stderr:
+                logger.debug(f"Stderr: {result.stderr[:500]}")
+
         return result.returncode, result.stdout, result.stderr
+
     except subprocess.TimeoutExpired:
-        logging.error(f"Command timed out after {timeout} seconds: {cmd}")
-        return -1, "", "Command timed out"
+        logger.error(f"Command timed out after {timeout}s: {cmd}")
+        return -1, "", f"Timeout after {timeout} seconds"
+    except FileNotFoundError:
+        logger.error(f"Command not found: {cmd}")
+        return 127, "", "Command not found"
     except Exception as e:
-        logging.error(f"An unexpected error occurred while running command '{cmd}': {e}")
+        logger.error(f"Command failed: {cmd} — {e}")
         return 1, "", str(e)
+
+# ─── Validation Utilities ────────────────────────────────────────────────────
+def validate_ip(target: str) -> bool:
+    """Validate IPv4 or IPv6 address."""
+    import ipaddress
+    try:
+        ipaddress.ip_address(target)
+        return True
+    except ValueError:
+        return False
+
+def validate_hostname(hostname: str) -> bool:
+    """Validate hostname format."""
+    import re
+    pattern = re.compile(
+        r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*'
+        r'[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'
+    )
+    return bool(pattern.match(hostname))
+
+def sanitize_filename(filename: str) -> str:
+    """Sanitize a filename to prevent path traversal."""
+    import re
+    filename = re.sub(r'[<>:"/\\|?*]', '', filename)
+    filename = filename.replace('..', '')
+    return filename.strip()[:255]
+
+# ─── Timer Context Manager ───────────────────────────────────────────────────
+class Timer:
+    """Context manager for timing operations."""
+
+    def __init__(self, name: str = "Operation"):
+        self.name = name
+        self.start_time: Optional[float] = None
+        self.elapsed: Optional[float] = None
+
+    def __enter__(self):
+        self.start_time = time.time()
+        return self
+
+    def __exit__(self, *args):
+        self.elapsed = time.time() - self.start_time
+        logger.info(f"{self.name} completed in {self.elapsed:.3f}s")

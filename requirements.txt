@@ -1,0 +1,31 @@
+# NullSec Red Team AI - Core Dependencies
+# Install: pip install -r requirements.txt
+
+# Web Framework
+flask>=2.3.0
+Werkzeug>=2.3.0
+gunicorn>=21.0.0
+
+# API & HTTP
+requests>=2.31.0
+urllib3>=2.0.0
+
+# MCP Integration
+fastmcp>=0.4.0
+
+# Security & Crypto
+cryptography>=41.0.0
+pydantic>=2.0.0
+
+# System & Monitoring
+psutil>=5.9.0
+flask-limiter>=3.5.0
+
+# Image Processing
+Pillow>=10.0.0
+
+# Database
+sqlite3-python  # built-in, listed for clarity
+
+# Async Support (for future expansion)
+# asyncio  # built-in Python 3.10+

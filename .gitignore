@@ -1,67 +1,86 @@
-
 # Byte-compiled / optimized / DLL files
-# C extensions
-# Distribution / packaging
-# Environments
-# IDE settings
-# Installer logs
-# Other
-# PyInstaller
-# Secrets
-# Unit test / coverage reports
-*$py.class
-*.cover
-*.egg
-*.egg-info/
-*.env
-*.key
-*.log
-*.manifest
-*.pem
-*.py,cover
-*.py[cod]
-*.pyc
-*.so
-*.spec
-*.tmp
-*key*
-*password*
-*token*
-.Python
-.cache
-.coverage
-.coverage.*
-.eggs/
-.env
-.hypothesis/
-.idea/
-.installed.cfg
-.nox/
-.pytest_cache/
-.tox/
-.venv
-.vscode/
-ENV/
-MANIFEST
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
 build/
-coverage.xml
-credentials.json
 develop-eggs/
 dist/
 downloads/
 eggs/
-env/
-htmlcov/
+.eggs/
 lib/
 lib64/
-nosetests.xml
 parts/
-pip-delete-this-directory.txt
-pip-log.txt
 sdist/
-secrets.json
-share/python-wheels/
 var/
-venv/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs & secrets
+*.log
+*.key
+*.pem
+*.p12
+*.pfx
+*.env
+.env.local
+.env.production
+credentials.json
+secrets.json
+*token*
+*password*
+*secret*
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Docker
+docker-compose.override.yml
+
+# NullSec specific
+/var/log/nullsec/*
+/opt/nullsec/jobs/*
+/opt/nullsec/*.backup.*
+/etc/nullsec/api_token
+.claude_desktop_config.json.bak

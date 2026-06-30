@@ -1,23 +1,37 @@
 [Unit]
 Description=HexStrike Worker Service
-After=network.target
+Documentation=https://github.com/Panda1847/NullSec-RedTeam-AI
+After=network.target hexstrike.service
+Requires=hexstrike.service
 
 [Service]
 Type=simple
 User=hexstrike
 Group=hexstrike
 WorkingDirectory=/opt/nullsec
-ExecStart=/opt/nullsec/venv/bin/python3 modules/worker/worker.py
+Environment=PATH=/opt/nullsec/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONPATH=/opt/nullsec
+Environment=NULLSEC_LOG_DIR=/var/log/nullsec
+Environment=NULLSEC_JOB_DIR=/opt/nullsec/jobs
+Environment=CONTAINER_RUNTIME=docker
+EnvironmentFile=-/etc/nullsec/environment
+ExecStart=/opt/nullsec/venv/bin/python3 -m modules.worker.worker --poll 2
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
 Restart=always
 RestartSec=5
-MemoryMax=512M
-CPUQuota=50%
+StartLimitInterval=60s
+StartLimitBurst=5
+MemoryMax=1G
+CPUQuota=75%
 NoNewPrivileges=true
-ProtectSystem=full
+ProtectSystem=strict
 ProtectHome=true
+ReadWritePaths=/var/log/nullsec /opt/nullsec/jobs
 PrivateTmp=true
 StandardOutput=append:/var/log/nullsec/worker.log
 StandardError=append:/var/log/nullsec/worker.log
+SyslogIdentifier=hexstrike-worker
 
 [Install]
 WantedBy=multi-user.target
