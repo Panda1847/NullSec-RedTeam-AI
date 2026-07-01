@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  NullSec Guardian v6.0                                                        ║
-║  System Integrity Checker & Automated Repair Tool                             ║
-║  Self-healing • Diagnostic • Hardened                                        ║
+║ NullSec Guardian v7.0                                                       ║
+║ System Integrity Checker & Automated Repair Tool                          ║
+║ Self-healing • Diagnostic • Hardened • Kali Linux Optimized              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -13,23 +13,48 @@ import subprocess
 import logging
 import argparse
 import json
+import shutil
+import time
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
+from datetime import datetime
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 LOG_DIR = Path("/var/log/nullsec")
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+log_file = None
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_DIR / "guardian.log"),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+try:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_file = LOG_DIR / "guardian.log"
+except (PermissionError, OSError) as e:
+    import tempfile
+    LOG_DIR = Path(tempfile.gettempdir()) / "nullsec_logs"
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_file = LOG_DIR / "guardian.log"
+    except (PermissionError, OSError):
+        log_file = None
+
+try:
+    handlers = [logging.StreamHandler(sys.stdout)]
+    if log_file:
+        handlers.append(logging.FileHandler(log_file))
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s",
+        handlers=handlers
+    )
+except Exception as e:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+    logging.warning(f"Could not configure file logging: {e}. Logging to stdout only.")
+
 logger = logging.getLogger("guardian")
 
 class Severity(Enum):
@@ -49,7 +74,7 @@ class Issue:
 
 # ─── Guardian Class ──────────────────────────────────────────────────────────
 class Guardian:
-    VERSION = "6.0.0"
+    VERSION = "7.0.0"
 
     def __init__(self):
         self.install_dir = Path("/opt/nullsec")
@@ -61,17 +86,33 @@ class Guardian:
         self.api_token_file = Path("/etc/nullsec/api_token")
         self.config_dir = Path("/etc/nullsec")
         self.required_tools = ["nmap", "sqlmap", "gobuster", "ffuf", "nikto", "hydra", "john"]
-        self.required_packages = ["flask", "requests", "fastmcp", "Pillow", "psutil"]
+        self.required_packages = ["flask", "requests", "fastmcp", "Pillow", "psutil", "urllib3"]
 
-    def _run_cmd(self, cmd: List[str], timeout: int = 10, check: bool = False) -> Tuple[int, str, str]:
+    def _run_cmd(self, cmd: List[str], timeout: int = 10, check: bool = False, 
+                 shell: bool = False, cwd: Optional[Path] = None) -> Tuple[int, str, str]:
         """Run command safely and return (rc, stdout, stderr)."""
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=check)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout, 
+                check=check, shell=shell, cwd=cwd
+            )
             return result.returncode, result.stdout, result.stderr
         except subprocess.TimeoutExpired:
-            return -1, "", "Command timed out"
+            return -1, "", f"Command timed out after {timeout}s"
+        except FileNotFoundError:
+            return 127, "", f"Command not found: {cmd[0] if cmd else 'unknown'}"
+        except PermissionError:
+            return 126, "", "Permission denied"
         except Exception as e:
             return 1, "", str(e)
+
+    def _get_python_cmd(self) -> str:
+        """Find the best available Python command."""
+        for cmd in [str(self.venv_python), "python3.12", "python3.11", "python3.10", "python3"]:
+            rc, _, _ = self._run_cmd([cmd, "--version"], timeout=3)
+            if rc == 0:
+                return cmd
+        return "python3"
 
     def check_system(self) -> List[Issue]:
         """Run comprehensive system integrity check."""
@@ -80,6 +121,7 @@ class Guardian:
         logger.info("=" * 70)
 
         issues = []
+        python_cmd = self._get_python_cmd()
 
         # 1. Install Directory
         if not self.install_dir.exists():
@@ -101,17 +143,17 @@ class Guardian:
         else:
             logger.info("✓ Virtual environment exists")
 
-            # Check packages
-            for pkg in self.required_packages:
-                rc, _, _ = self._run_cmd([str(self.venv_python), "-c", f"import {pkg}"], timeout=5)
-                if rc != 0:
-                    issues.append(Issue(
-                        f"venv_pkg_{pkg}", Severity.HIGH,
-                        f"Package '{pkg}' not installed in venv",
-                        f"sudo {self.venv_pip} install {pkg}", True
-                    ))
-                else:
-                    logger.info(f"  ✓ Package {pkg}")
+        # Check packages
+        for pkg in self.required_packages:
+            rc, _, _ = self._run_cmd([python_cmd, "-c", f"import {pkg}"], timeout=5)
+            if rc != 0:
+                issues.append(Issue(
+                    f"venv_pkg_{pkg}", Severity.HIGH,
+                    f"Package '{pkg}' not installed in venv",
+                    f"sudo {self.venv_pip} install {pkg}", True
+                ))
+            else:
+                logger.info(f" ✓ Package {pkg}")
 
         # 3. Systemd Services
         for svc in [self.service_name, self.worker_service]:
@@ -142,15 +184,22 @@ class Guardian:
                 f"sudo openssl rand -hex 32 > {self.api_token_file} && sudo chmod 600 {self.api_token_file}", True
             ))
         else:
-            perms = oct(self.api_token_file.stat().st_mode)[-3:]
-            if perms != "600":
+            try:
+                perms = oct(self.api_token_file.stat().st_mode)[-3:]
+                if perms != "600":
+                    issues.append(Issue(
+                        "api_token_perms", Severity.MEDIUM,
+                        f"API token permissions are {perms}, expected 600",
+                        f"sudo chmod 600 {self.api_token_file}", True
+                    ))
+                else:
+                    logger.info("✓ API token file exists with correct permissions")
+            except (OSError, PermissionError) as e:
                 issues.append(Issue(
-                    "api_token_perms", Severity.MEDIUM,
-                    f"API token permissions are {perms}, expected 600",
+                    "api_token_access", Severity.MEDIUM,
+                    f"Cannot read API token file: {e}",
                     f"sudo chmod 600 {self.api_token_file}", True
                 ))
-            else:
-                logger.info("✓ API token file exists with correct permissions")
 
         # 5. MCP Config
         real_user = os.environ.get("SUDO_USER") or os.environ.get("USER")
@@ -197,6 +246,21 @@ class Guardian:
                 f"mkdir -p {workspace}", True
             ))
 
+        # 9. Disk space check
+        try:
+            stat = shutil.disk_usage("/opt/nullsec")
+            free_gb = stat.free / (1024**3)
+            if free_gb < 1:
+                issues.append(Issue(
+                    "disk_space", Severity.HIGH,
+                    f"Low disk space: {free_gb:.1f}GB free",
+                    "Clean up disk space", False
+                ))
+            else:
+                logger.info(f"✓ Disk space: {free_gb:.1f}GB free")
+        except Exception:
+            pass
+
         # Summary
         logger.info("=" * 70)
         if not issues:
@@ -232,8 +296,8 @@ class Guardian:
 
         for issue in issues:
             if not issue.auto_fixable:
-                logger.info(f"⏭️  Skipping (manual fix required): {issue.message}")
-                logger.info(f"   Manual fix: {issue.fix}")
+                logger.info(f"⏭️ Skipping (manual fix required): {issue.message}")
+                logger.info(f" Manual fix: {issue.fix}")
                 skipped += 1
                 continue
 
@@ -242,30 +306,33 @@ class Guardian:
             # Safety: only allow known-safe commands
             safe_cmds = ["apt-get", "systemctl", "mkdir", "chmod", "chown",
                         "openssl", "python3", "pip", "install.sh", "cp", "mv",
-                        "rm", "touch", "useradd", "groupadd"]
+                        "rm", "touch", "useradd", "groupadd", "apt", "dpkg"]
             is_safe = any(cmd in issue.fix for cmd in safe_cmds)
 
             if not is_safe:
-                logger.warning(f"   Fix not in safe list. Manual: {issue.fix}")
+                logger.warning(f" Fix not in safe list. Manual: {issue.fix}")
                 skipped += 1
                 continue
 
             try:
                 if "install.sh" in issue.fix:
                     subprocess.run(["sudo", "./install.sh", "--core"],
-                                   check=True, cwd=str(self.install_dir), timeout=300)
+                                 check=True, cwd=str(self.install_dir), timeout=300)
                 else:
                     subprocess.run(issue.fix, shell=True, check=True,
-                                   capture_output=True, timeout=60)
+                                 capture_output=True, timeout=120)
 
-                logger.info(f"   ✅ Fixed: {issue.component}")
+                logger.info(f" ✅ Fixed: {issue.component}")
                 fixed += 1
 
             except subprocess.CalledProcessError as e:
-                logger.error(f"   ❌ Failed: {e}")
+                logger.error(f" ❌ Failed: {e}")
                 failed += 1
             except subprocess.TimeoutExpired:
-                logger.error(f"   ❌ Timeout during repair")
+                logger.error(f" ❌ Timeout during repair")
+                failed += 1
+            except Exception as e:
+                logger.error(f" ❌ Unexpected error: {e}")
                 failed += 1
 
         logger.info("=" * 70)
@@ -301,7 +368,7 @@ class Guardian:
             ],
             "module not found": [
                 "Missing Python package in virtual environment.",
-                "Fix: sudo /opt/nullsec/venv/bin/pip install <missing_module>"
+                f"Fix: sudo {self.venv_pip} install <missing_package>",
             ],
             "port": [
                 "Port 8888 may be in use.",
@@ -316,6 +383,15 @@ class Guardian:
                 "MCP configuration issue.",
                 "Fix: sudo ./install.sh --mcp",
                 "Check: ~/.config/Claude/claude_desktop_config.json"
+            ],
+            "permission denied": [
+                "Insufficient permissions.",
+                "Fix: Run with sudo",
+                "Or: Check file permissions with ls -la"
+            ],
+            "no such file": [
+                "File or directory not found.",
+                "Fix: Re-run installer: sudo ./install.sh --full",
             ],
         }
 
@@ -353,6 +429,76 @@ class Guardian:
         }
         return json.dumps(report, indent=2)
 
+    def stress_test(self) -> bool:
+        """Run a quick stress test on the system."""
+        logger.info("=" * 70)
+        logger.info("NullSec Guardian — Quick Stress Test")
+        logger.info("=" * 70)
+
+        passed = 0
+        failed = 0
+
+        # Test 1: API health
+        logger.info("Test 1: API Health Check...")
+        try:
+            import requests
+            api_token = self.api_token_file.read_text().strip() if self.api_token_file.exists() else ""
+            resp = requests.get(
+                "http://localhost:8888/health",
+                headers={"Authorization": f"Bearer {api_token}"} if api_token else {},
+                timeout=5
+            )
+            if resp.status_code == 200:
+                logger.info(" ✅ API Health: PASSED")
+                passed += 1
+            else:
+                logger.warning(f" ⚠️ API Health: HTTP {resp.status_code}")
+                failed += 1
+        except Exception as e:
+            logger.error(f" ❌ API Health: {e}")
+            failed += 1
+
+        # Test 2: Job store
+        logger.info("Test 2: Job Store...")
+        try:
+            sys.path.insert(0, str(self.install_dir))
+            from modules.worker.job_store import JobStore
+            store = JobStore()
+            job_id = store.create_job("test", "127.0.0.1", "-sn")
+            job = store.get_job(job_id)
+            if job and job["tool"] == "test":
+                logger.info(" ✅ Job Store: PASSED")
+                passed += 1
+            else:
+                logger.warning(" ⚠️ Job Store: Retrieval failed")
+                failed += 1
+            store.cleanup_old_jobs(days=0)
+        except Exception as e:
+            logger.error(f" ❌ Job Store: {e}")
+            failed += 1
+
+        # Test 3: Python packages
+        logger.info("Test 3: Python Packages...")
+        python_cmd = self._get_python_cmd()
+        all_ok = True
+        for pkg in self.required_packages:
+            rc, _, _ = self._run_cmd([python_cmd, "-c", f"import {pkg}"], timeout=5)
+            if rc != 0:
+                all_ok = False
+                break
+        if all_ok:
+            logger.info(" ✅ Python Packages: PASSED")
+            passed += 1
+        else:
+            logger.warning(" ⚠️ Python Packages: Some missing")
+            failed += 1
+
+        logger.info("=" * 70)
+        logger.info(f"Stress Test: {passed} passed, {failed} failed")
+        logger.info("=" * 70)
+
+        return failed == 0
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(
@@ -360,16 +506,18 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  guardian --check              Full system check
-  guardian --repair             Auto-repair issues
-  guardian --report             Generate JSON report
-  guardian "connection error"   Diagnose specific error
-  guardian --version            Show version
-        """
+  guardian --check       Full system check
+  guardian --repair      Auto-repair issues
+  guardian --report      Generate JSON report
+  guardian --stress      Run stress test
+  guardian "connection error"  Diagnose specific error
+  guardian --version     Show version
+"""
     )
     parser.add_argument("--check", action="store_true", help="Run system check")
     parser.add_argument("--repair", action="store_true", help="Auto-repair")
     parser.add_argument("--report", action="store_true", help="Generate JSON report")
+    parser.add_argument("--stress", action="store_true", help="Run stress test")
     parser.add_argument("--version", action="store_true", help="Show version")
     parser.add_argument("error_message", nargs="?", help="Error to diagnose")
 
@@ -387,6 +535,9 @@ Examples:
     elif args.report:
         issues = guardian.check_system()
         print(guardian.generate_report(issues))
+    elif args.stress:
+        success = guardian.stress_test()
+        sys.exit(0 if success else 1)
     elif args.error_message:
         print(guardian.diagnose_error(args.error_message))
     elif args.check or len(sys.argv) == 1:

@@ -1,1 +1,1 @@
-"""HexStrike Worker - Job Processing"""
+"""NullSec Worker Module"""

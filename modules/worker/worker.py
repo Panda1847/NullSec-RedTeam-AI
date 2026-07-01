@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  HexStrike Worker Service v6.0                                                ║
-║  Secure job processor with sandboxing, resource limits & graceful shutdown     ║
+║ HexStrike Worker Service v7.0                                               ║
+║ Secure job processor with sandboxing, resource limits & graceful shutdown ║
+║ Kali Linux Optimized • Container-aware • Fault-tolerant                     ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -13,15 +14,20 @@ import signal
 import subprocess
 import shlex
 import logging
-import resource
 import tempfile
 import atexit
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+SCRIPT_DIR = Path(__file__).resolve().parent.parent.parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-from modules.worker.job_store import JobStore
+try:
+    from modules.worker.job_store import JobStore, JobStoreError
+except ImportError as e:
+    logging.critical(f"Failed to import JobStore: {e}")
+    sys.exit(1)
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 LOG_DIR = Path(os.environ.get("NULLSEC_LOG_DIR", "/var/log/nullsec"))
@@ -30,17 +36,34 @@ CONTAINER_RUNTIME = os.environ.get("CONTAINER_RUNTIME", "docker")
 MAX_RETRIES = 3
 JOB_TIMEOUT = 300
 
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-JOB_DIR.mkdir(parents=True, exist_ok=True)
+# Ensure directories exist
+try:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    JOB_DIR.mkdir(parents=True, exist_ok=True)
+except (PermissionError, OSError) as e:
+    # Fallback to temp
+    LOG_DIR = Path("/tmp/nullsec_logs")
+    JOB_DIR = Path("/tmp/nullsec_jobs")
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    JOB_DIR.mkdir(parents=True, exist_ok=True)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_DIR / "worker.log"),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+# Logging
+try:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s",
+        handlers=[
+            logging.FileHandler(LOG_DIR / "worker.log"),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+except (PermissionError, OSError):
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+
 logger = logging.getLogger("hexstrike_worker")
 
 # ─── Signal Handling ─────────────────────────────────────────────────────────
@@ -58,143 +81,295 @@ signal.signal(signal.SIGINT, _signal_handler)
 def _limit_resources():
     """Apply strict resource limits to child processes."""
     try:
-        resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024, 1024 * 1024 * 1024))  # 1GB
-        resource.setrlimit(resource.RLIMIT_CPU, (300, 300))  # 5 min CPU
-        resource.setrlimit(resource.RLIMIT_NOFILE, (1024, 1024))
-        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))  # No core dumps
-        resource.setrlimit(resource.RLIMIT_NPROC, (50, 50))  # Max 50 processes
+        import resource as _resource
+        # Memory: 1GB
+        _resource.setrlimit(_resource.RLIMIT_AS, (1024 * 1024 * 1024, 1024 * 1024 * 1024))
+        # CPU: 5 minutes
+        _resource.setrlimit(_resource.RLIMIT_CPU, (300, 300))
+        # File descriptors
+        _resource.setrlimit(_resource.RLIMIT_NOFILE, (1024, 1024))
+        # No core dumps
+        _resource.setrlimit(_resource.RLIMIT_CORE, (0, 0))
+        # Max 50 processes
+        _resource.setrlimit(_resource.RLIMIT_NPROC, (50, 50))
+    except ImportError:
+        logger.warning("resource module not available (non-Linux platform). Skipping resource limits.")
     except ValueError as e:
         logger.warning(f"Could not set resource limits: {e}")
+    except Exception as e:
+        logger.warning(f"Unexpected error setting resource limits: {e}")
 
 # ─── Worker Class ────────────────────────────────────────────────────────────
 class Worker:
     def __init__(self, poll_interval: int = 2):
-        self.store = JobStore()
-        self.poll_interval = poll_interval
+        try:
+            self.store = JobStore()
+        except Exception as e:
+            logger.critical(f"Failed to initialize JobStore: {e}")
+            raise
+
+        self.poll_interval = max(1, poll_interval)  # Minimum 1 second
         self._running = True
         self._current_job: Optional[str] = None
         self._cleanup_old_logs()
         atexit.register(self._emergency_cleanup)
 
     def _cleanup_old_logs(self, max_age_days: int = 7):
-        cutoff = time.time() - (max_age_days * 86400)
-        for log_file in LOG_DIR.glob("*.log"):
-            if log_file.stat().st_mtime < cutoff and log_file.name not in ("worker.log", "server.log"):
-                try:
-                    log_file.unlink()
-                except OSError:
-                    pass
+        """Clean up old log files."""
+        try:
+            cutoff = time.time() - (max_age_days * 86400)
+            for log_file in LOG_DIR.glob("*.log"):
+                if log_file.name not in ("worker.log", "server.log"):
+                    try:
+                        if log_file.stat().st_mtime < cutoff:
+                            log_file.unlink()
+                    except OSError:
+                        pass
+        except Exception as e:
+            logger.warning(f"Log cleanup failed: {e}")
 
     def _emergency_cleanup(self):
+        """Mark current job as failed on unexpected exit."""
         if self._current_job:
             try:
-                self.store.update_job(self._current_job, 'failed', result='Worker crashed or killed')
+                self.store.update_job(self._current_job, 'failed', 
+                                    result='Worker crashed or killed during execution')
                 logger.warning(f"Emergency cleanup: marked job {self._current_job} as failed")
             except Exception:
                 pass
 
     def _validate_tool(self, tool: str) -> Tuple[bool, str]:
+        """Validate tool name and availability."""
         if not tool or not isinstance(tool, str):
             return False, "Invalid tool name"
-        if subprocess.run(["which", tool], capture_output=True).returncode != 0:
-            return False, f"Tool '{tool}' not found in PATH"
+        if len(tool) > 64:
+            return False, "Tool name too long"
+
+        # Check for path traversal
+        if "/" in tool or "\\" in tool or ".." in tool:
+            return False, "Tool name contains invalid characters"
+
+        # Check if tool exists in PATH
+        try:
+            result = subprocess.run(["which", tool], capture_output=True, timeout=5)
+            if result.returncode != 0:
+                return False, f"Tool '{tool}' not found in PATH"
+        except Exception as e:
+            return False, f"Could not verify tool: {e}"
+
         return True, ""
 
-    def _run_job_local(self, job: Dict[str, Any]) -> Tuple[int, str]:
-        tool = job['tool']
-        target = job['target']
-        options = job.get('options', '') or ""
+    def _sanitize_options(self, options: str) -> Tuple[bool, str, List[str]]:
+        """Sanitize and parse options. Returns (valid, error, parsed_args)."""
+        if not options:
+            return True, "", []
 
+        # Check for dangerous characters
+        dangerous = [";", "|", "&", "$", "`", ">", "<", "(", ")", "{", "}", "\\", "\n", "\r"]
+        if any(c in options for c in dangerous):
+            return False, "Options contain forbidden characters", []
+
+        # Check for path traversal
+        if ".." in options:
+            return False, "Options contain path traversal", []
+
+        # Check for shell execution
+        if any(pattern in options for pattern in ["$(", "${", "`", "eval", "exec"]):
+            return False, "Options contain shell execution patterns", []
+
+        try:
+            parsed = shlex.split(options)
+            return True, "", parsed
+        except ValueError as e:
+            return False, f"Invalid options format: {e}", []
+
+    def _run_job_local(self, job: Dict[str, Any]) -> Tuple[int, str]:
+        """Run job locally with resource limits."""
+        tool = job.get('tool', '')
+        target = job.get('target', '')
+        options = job.get('options', '') or ""
+        job_id = job.get('id', 'unknown')
+
+        # Validate tool
         valid, error = self._validate_tool(tool)
         if not valid:
+            logger.error(f"Job {job_id}: {error}")
             return 127, error
 
-        cmd = [tool]
-        if options:
-            try:
-                parsed = shlex.split(options)
-                for arg in parsed:
-                    if any(c in arg for c in [';', '&', '|', '$', '`', '>', '<']):
-                        return 1, f"Invalid characters in options: {arg}"
-                cmd.extend(parsed)
-            except ValueError as e:
-                return 1, f"Invalid options format: {e}"
+        # Validate and parse options
+        opts_valid, opts_error, parsed_opts = self._sanitize_options(options)
+        if not opts_valid:
+            logger.error(f"Job {job_id}: {opts_error}")
+            return 1, opts_error
 
+        # Build command
+        cmd = [tool]
+        cmd.extend(parsed_opts)
         cmd.append(target)
 
-        log_path = LOG_DIR / f"{job['id']}.log"
-        logger.info(f"Executing: {' '.join(cmd)} → {log_path}")
+        log_path = LOG_DIR / f"{job_id}.log"
+        logger.info(f"Executing job {job_id}: {' '.join(cmd)} → {log_path}")
 
         try:
             with open(log_path, 'w') as lf:
                 lf.write(f"# Command: {' '.join(cmd)}\n")
                 lf.write(f"# Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
                 lf.write("=" * 60 + "\n")
+                lf.flush()
 
                 proc = subprocess.run(
-                    cmd, capture_output=True, text=True,
-                    timeout=JOB_TIMEOUT, preexec_fn=_limit_resources
+                    cmd, 
+                    capture_output=True, 
+                    text=True,
+                    timeout=JOB_TIMEOUT, 
+                    preexec_fn=_limit_resources
                 )
 
                 output = proc.stdout or proc.stderr or ""
                 lf.write(output)
                 lf.write(f"\n# Exit code: {proc.returncode}\n")
+                lf.write(f"# Completed: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-                return proc.returncode, str(log_path)
+            return proc.returncode, str(log_path)
 
         except subprocess.TimeoutExpired:
-            logger.error(f"Job {job['id']} timed out")
+            logger.error(f"Job {job_id} timed out after {JOB_TIMEOUT}s")
+            with open(log_path, 'a') as lf:
+                lf.write(f"\n# TIMEOUT after {JOB_TIMEOUT} seconds\n")
             return 124, str(log_path)
+        except FileNotFoundError:
+            logger.error(f"Job {job_id}: Tool '{tool}' not found")
+            return 127, str(log_path)
+        except PermissionError:
+            logger.error(f"Job {job_id}: Permission denied executing '{tool}'")
+            return 126, str(log_path)
         except Exception as e:
-            logger.exception(f"Job {job['id']} failed")
+            logger.exception(f"Job {job_id} failed with unexpected error")
+            with open(log_path, 'a') as lf:
+                lf.write(f"\n# ERROR: {str(e)}\n")
             return 1, str(log_path)
 
     def _run_job_container(self, job: Dict[str, Any]) -> Tuple[int, str]:
-        image = os.environ.get('TOOL_IMAGE', 'nullsec/toolbox:latest')
-        workspace = JOB_DIR / job['id']
-        workspace.mkdir(parents=True, exist_ok=True)
-        log_path = LOG_DIR / f"{job['id']}.log"
+        """Run job in container with fallback to local."""
+        job_id = job.get('id', 'unknown')
+        tool = job.get('tool', '')
+        target = job.get('target', '')
+        options = job.get('options', '') or ""
 
-        run_cmd = [CONTAINER_RUNTIME, 'run', '--rm', '-v', f"{workspace}:/work", image]
-        tool_cmd = [job['tool']] + (shlex.split(job['options']) if job['options'] else []) + [job['target']]
-        run_cmd.extend(tool_cmd)
+        image = os.environ.get('TOOL_IMAGE', 'nullsec/toolbox:latest')
+        workspace = JOB_DIR / job_id
+
+        try:
+            workspace.mkdir(parents=True, exist_ok=True)
+        except (PermissionError, OSError) as e:
+            logger.warning(f"Could not create workspace {workspace}: {e}")
+            workspace = Path(tempfile.mkdtemp(prefix=f"nullsec_{job_id}_"))
+
+        log_path = LOG_DIR / f"{job_id}.log"
+
+        # Parse options safely
+        opts_valid, opts_error, parsed_opts = self._sanitize_options(options)
+        if not opts_valid:
+            logger.error(f"Job {job_id}: {opts_error}")
+            return 1, str(log_path)
+
+        run_cmd = [CONTAINER_RUNTIME, 'run', '--rm', 
+                   '--network=host',  # Allow network scanning
+                   '-v', f"{workspace}:/work",
+                   '--memory=1g',
+                   '--cpus=1.0',
+                   '--timeout=300',
+                   image]
+        run_cmd.append(tool)
+        run_cmd.extend(parsed_opts)
+        run_cmd.append(target)
 
         try:
             with open(log_path, 'w') as lf:
+                lf.write(f"# Container Command: {' '.join(run_cmd)}\n")
+                lf.write(f"# Started: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                lf.flush()
+
                 proc = subprocess.run(run_cmd, capture_output=True, text=True, timeout=600)
-                lf.write(proc.stdout or proc.stderr)
-                return proc.returncode, str(log_path)
+                lf.write(proc.stdout or proc.stderr or "")
+                lf.write(f"\n# Exit code: {proc.returncode}\n")
+
+            return proc.returncode, str(log_path)
         except subprocess.TimeoutExpired:
+            logger.error(f"Job {job_id} container timed out")
             return 124, str(log_path)
+        except FileNotFoundError:
+            logger.warning(f"Container runtime '{CONTAINER_RUNTIME}' not found, falling back to local")
+            return self._run_job_local(job)
         except Exception as e:
-            return 1, str(log_path)
+            logger.error(f"Job {job_id} container error: {e}, falling back to local")
+            return self._run_job_local(job)
+
+    def _has_container_runtime(self) -> bool:
+        """Check if container runtime is available."""
+        try:
+            result = subprocess.run(
+                [CONTAINER_RUNTIME, '--version'], 
+                capture_output=True, 
+                timeout=5
+            )
+            return result.returncode == 0
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return False
 
     def run_once(self, job_id: str):
-        job = self.store.get_job(job_id)
-        if not job:
-            return
-
-        self._current_job = job_id
-
-        # Try containerized first, fallback to local
+        """Process a single job."""
         try:
-            subprocess.run([CONTAINER_RUNTIME, '--version'], check=True, capture_output=True, timeout=5)
-            code, log = self._run_job_container(job)
-        except Exception:
-            code, log = self._run_job_local(job)
+            job = self.store.get_job(job_id)
+            if not job:
+                logger.warning(f"Job {job_id} not found")
+                return
 
-        if code == 0:
-            self.store.update_job(job_id, 'done', result=f'Completed successfully', exit_code=code, log_path=log)
-            logger.info(f"Job {job_id} completed")
-        else:
-            self.store.update_job(job_id, 'failed', result=f'Exit code: {code}', exit_code=code, log_path=log)
-            logger.warning(f"Job {job_id} failed with code {code}")
+            self._current_job = job_id
 
-        self._current_job = None
+            # Try containerized first, fallback to local
+            if self._has_container_runtime():
+                code, log = self._run_job_container(job)
+            else:
+                code, log = self._run_job_local(job)
+
+            if code == 0:
+                self.store.update_job(
+                    job_id, 'done', 
+                    result='Completed successfully', 
+                    exit_code=code, 
+                    log_path=log
+                )
+                logger.info(f"Job {job_id} completed successfully")
+            else:
+                self.store.update_job(
+                    job_id, 'failed', 
+                    result=f'Exit code: {code}', 
+                    exit_code=code, 
+                    log_path=log
+                )
+                logger.warning(f"Job {job_id} failed with exit code {code}")
+
+        except JobStoreError as e:
+            logger.error(f"JobStore error for {job_id}: {e}")
+        except Exception as e:
+            logger.exception(f"Unexpected error processing job {job_id}")
+            try:
+                self.store.update_job(job_id, 'failed', result=f'Worker error: {str(e)}')
+            except:
+                pass
+        finally:
+            self._current_job = None
 
     def run(self):
-        logger.info("HexStrike Worker started")
+        """Main worker loop."""
+        logger.info("HexStrike Worker v7.0 started")
         logger.info(f"Polling interval: {self.poll_interval}s")
+        logger.info(f"Job timeout: {JOB_TIMEOUT}s")
+        logger.info(f"Container runtime: {CONTAINER_RUNTIME} (available: {self._has_container_runtime()})")
+
+        consecutive_errors = 0
+        max_consecutive_errors = 10
 
         while self._running and not _shutdown_requested:
             try:
@@ -202,22 +377,41 @@ class Worker:
                 if job_id:
                     logger.info(f"Picked job {job_id}")
                     self.run_once(job_id)
+                    consecutive_errors = 0
                 else:
                     time.sleep(self.poll_interval)
+                    consecutive_errors = 0
+            except JobStoreError as e:
+                consecutive_errors += 1
+                logger.error(f"JobStore error (consecutive: {consecutive_errors}): {e}")
+                if consecutive_errors >= max_consecutive_errors:
+                    logger.critical("Too many consecutive errors, shutting down")
+                    break
+                time.sleep(self.poll_interval * min(consecutive_errors, 5))
             except Exception as e:
-                logger.exception("Worker loop error")
-                time.sleep(self.poll_interval)
+                consecutive_errors += 1
+                logger.exception(f"Worker loop error (consecutive: {consecutive_errors})")
+                if consecutive_errors >= max_consecutive_errors:
+                    logger.critical("Too many consecutive errors, shutting down")
+                    break
+                time.sleep(self.poll_interval * min(consecutive_errors, 5))
 
         logger.info("Worker shutting down gracefully")
 
     def stop(self):
+        """Stop the worker."""
         self._running = False
+        logger.info("Worker stop requested")
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="HexStrike Worker")
+    parser = argparse.ArgumentParser(description="HexStrike Worker v7.0")
     parser.add_argument("--poll", type=int, default=2, help="Polling interval in seconds")
+    parser.add_argument("--timeout", type=int, default=300, help="Job timeout in seconds")
     args = parser.parse_args()
+
+    global JOB_TIMEOUT
+    JOB_TIMEOUT = args.timeout
 
     worker = Worker(poll_interval=args.poll)
 
@@ -226,6 +420,9 @@ def main():
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received")
         worker.stop()
+    except Exception as e:
+        logger.critical(f"Fatal error: {e}")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

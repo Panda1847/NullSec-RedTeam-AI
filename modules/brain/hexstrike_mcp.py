@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  HexStrike MCP Bridge v6.0                                                    ║
-║  Claude Desktop ↔ HexStrike Server Integration                                ║
-║  Fault-tolerant • Auto-retry • Auth-aware                                    ║
+║ HexStrike MCP Bridge v7.0                                                   ║
+║ Claude Desktop ↔ HexStrike Server Integration                               ║
+║ Fault-tolerant • Auto-retry • Auth-aware • Kali Linux Optimized          ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -21,16 +21,38 @@ from urllib3.util.retry import Retry
 
 # ─── Logging ───────────────────────────────────────────────────────────────
 LOG_DIR = Path(os.environ.get("NULLSEC_LOG_DIR", "/var/log/nullsec"))
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+log_file = None
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_DIR / "mcp.log"),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+try:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_file = LOG_DIR / "mcp.log"
+except (PermissionError, OSError) as e:
+    import tempfile
+    LOG_DIR = Path(tempfile.gettempdir()) / "nullsec_logs"
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_file = LOG_DIR / "mcp.log"
+    except (PermissionError, OSError):
+        log_file = None
+
+try:
+    handlers = [logging.StreamHandler(sys.stdout)]
+    if log_file:
+        handlers.append(logging.FileHandler(log_file))
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s",
+        handlers=handlers
+    )
+except Exception as e:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(name)-20s | %(levelname)-8s | %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+    logging.warning(f"Could not configure file logging: {e}. Logging to stdout only.")
+
 logger = logging.getLogger("hexstrike_mcp")
 
 # ─── FastMCP Import with Robust Fallback ───────────────────────────────────
@@ -42,19 +64,32 @@ except ImportError as e:
     logger.error("Install: pip install fastmcp>=0.4.0")
 
     class _DummyMCP:
+        """Dummy MCP that preserves decorator functionality."""
         def __init__(self, name: str):
             self.name = name
+            self._tools = {}
             logger.warning("Running in DUMMY mode — MCP functionality disabled")
 
         def tool(self, *args, **kwargs):
+            """Decorator that registers tools but returns a helpful error."""
             def decorator(f):
                 def wrapper(*args, **kwargs):
-                    return "❌ ERROR: MCP server not available. Install fastmcp package."
+                    return (
+                        "❌ ERROR: MCP server not available.\n\n"
+                        "**Fix it:**\n"
+                        "```bash\n"
+                        f"{sys.executable} -m pip install fastmcp>=0.4.0\n"
+                        "```\n\n"
+                        "Then restart Claude Desktop."
+                    )
+                self._tools[f.__name__] = wrapper
                 return wrapper
             return decorator
 
         def run(self):
             logger.error("Cannot run MCP server: fastmcp not installed")
+            logger.error(f"Install: {sys.executable} -m pip install fastmcp>=0.4.0")
+            # Keep alive so Claude doesn't crash
             while True:
                 time.sleep(60)
 
@@ -72,7 +107,7 @@ _CACHE_TTL: float = 300
 # ─── HTTP Session with Retry Logic ─────────────────────────────────────────
 _session = requests.Session()
 _retries = Retry(
-    total=3,
+    total=5,
     backoff_factor=1,
     status_forcelist=[500, 502, 503, 504],
     allowed_methods=["HEAD", "GET", "POST"]
@@ -87,6 +122,7 @@ def _get_headers() -> Dict[str, str]:
     return headers
 
 def _fetch_tools() -> List[str]:
+    """Fetch available tools from HexStrike server with caching."""
     global _AVAILABLE_TOOLS, _CACHE_TIME
 
     now = time.time()
@@ -97,19 +133,62 @@ def _fetch_tools() -> List[str]:
         resp = _session.get(
             f"{HEXSTRIKE_SERVER_URL}/health",
             headers=_get_headers(),
-            timeout=5
+            timeout=10
         )
         resp.raise_for_status()
         data = resp.json()
         tools = list(data.get("tools", {}).keys()) if isinstance(data.get("tools"), dict) else data.get("tools", [])
         _AVAILABLE_TOOLS = tools
         _CACHE_TIME = now
+        logger.info(f"Fetched {len(tools)} tools from server")
         return tools
+    except requests.exceptions.ConnectionError:
+        logger.warning("Cannot connect to HexStrike server for tool fetch")
+        return ["nmap", "sqlmap", "gobuster", "hydra", "nuclei", "ffuf", "nikto", "dirsearch"]
+    except requests.exceptions.Timeout:
+        logger.warning("Timeout fetching tools from HexStrike server")
+        return ["nmap", "sqlmap", "gobuster", "hydra", "nuclei", "ffuf", "nikto", "dirsearch"]
     except Exception as e:
         logger.warning(f"Could not fetch tools: {e}")
-        return ["nmap", "sqlmap", "gobuster", "hydra", "nuclei", "ffuf", "nikto"]
+        return ["nmap", "sqlmap", "gobuster", "hydra", "nuclei", "ffuf", "nikto", "dirsearch"]
 
-# ─── Initialize MCP ────────────────────────────────────────────────────────
+def _make_request(method: str, endpoint: str, payload: Optional[Dict] = None, timeout: int = 30) -> Dict[str, Any]:
+    """Make a request to the HexStrike server with comprehensive error handling."""
+    url = f"{HEXSTRIKE_SERVER_URL}{endpoint}"
+
+    try:
+        if method.upper() == "GET":
+            resp = _session.get(url, headers=_get_headers(), timeout=timeout)
+        else:
+            resp = _session.post(url, json=payload, headers=_get_headers(), timeout=timeout)
+
+        resp.raise_for_status()
+        return {"success": True, "data": resp.json(), "status": resp.status_code}
+
+    except requests.exceptions.ConnectionError:
+        logger.error(f"Cannot connect to HexStrike server at {HEXSTRIKE_SERVER_URL}")
+        return {
+            "success": False,
+            "error": "Connection Error",
+            "message": f"Cannot reach HexStrike Server at {HEXSTRIKE_SERVER_URL}.\n\n**Fix it:**\n```bash\nsudo systemctl status hexstrike\nsudo systemctl start hexstrike\n```"
+        }
+    except requests.exceptions.Timeout:
+        logger.error(f"Request to {url} timed out")
+        return {"success": False, "error": "Timeout", "message": "Server is overloaded. Try again later."}
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response else 0
+        if status == 401:
+            return {"success": False, "error": "Authentication Failed", "message": "Check API token configuration."}
+        elif status == 403:
+            return {"success": False, "error": "Forbidden", "message": "Invalid permissions."}
+        elif status == 429:
+            return {"success": False, "error": "Rate Limited", "message": "Too many requests. Wait a moment."}
+        return {"success": False, "error": f"HTTP {status}", "message": str(e)}
+    except Exception as e:
+        logger.exception(f"Unexpected error in request to {url}")
+        return {"success": False, "error": "Unexpected Error", "message": str(e)}
+
+# ─── Initialize MCP ──────────────────────────────────────────────────────────
 mcp = FastMCP("NullSec Red Team")
 
 @mcp.tool()
@@ -118,147 +197,137 @@ def run_security_tool(tool_name: str, target: str, options: str = "") -> str:
     Execute a security tool via the HexStrike orchestration server.
 
     Args:
-        tool_name: Tool to run (nmap, sqlmap, gobuster, hydra, nuclei, ffuf, nikto)
+        tool_name: Tool to run (nmap, sqlmap, gobuster, hydra, nuclei, ffuf, nikto, dirsearch)
         target: Target IP, hostname, or URL
         options: Additional command-line options
 
     Returns:
         Job status and polling instructions
     """
+    if not tool_name or not isinstance(tool_name, str):
+        return "❌ Invalid tool name. Must be a non-empty string."
+
+    if not target or not isinstance(target, str):
+        return "❌ Invalid target. Must be a non-empty string."
+
+    if len(target) > 512:
+        return "❌ Target exceeds maximum length (512 chars)."
+
+    forbidden_chars = ["..", "$", "`", "|", ";", "&", ">", "<", "\n", "\r"]
+    if any(c in target for c in forbidden_chars):
+        return "❌ Target contains forbidden characters."
+
+    if options and len(options) > 1024:
+        return "❌ Options exceed maximum length (1024 chars)."
+
     available = _fetch_tools()
     if tool_name not in available:
         return f"❌ Tool '{tool_name}' not available. Available: {', '.join(available)}"
 
-    if not target or len(target) > 512:
-        return "❌ Invalid target (empty or exceeds 512 chars)"
+    result = _make_request("POST", "/api/tools/execute", {
+        "tool": tool_name,
+        "target": target,
+        "options": options
+    })
 
-    if any(c in target for c in ["..", "$", "`", "|", ";", "&", ">", "<"]):
-        return "❌ Target contains forbidden characters"
+    if not result.get("success"):
+        return f"❌ **{result.get('error', 'Error')}**: {result.get('message', 'Unknown error')}"
 
-    url = f"{HEXSTRIKE_SERVER_URL}/api/tools/execute"
-    payload = {"tool": tool_name, "target": target, "options": options}
+    data = result["data"]
+    job_id = data.get("job_id", "unknown")
+    status = data.get("status", "unknown")
 
-    try:
-        response = _session.post(url, json=payload, headers=_get_headers(), timeout=30)
-        response.raise_for_status()
-        result = response.json()
-
-        job_id = result.get("job_id", "unknown")
-        status = result.get("status", "unknown")
-
-        return (
-            f"### 🛠️ Tool: {tool_name}\n"
-            f"**Target**: `{target}`\n"
-            f"**Status**: {status}\n"
-            f"**Job ID**: `{job_id}`\n\n"
-            f"📊 Check results with: `get_job_status('{job_id}')`"
-        )
-
-    except requests.exceptions.ConnectionError:
-        logger.error("Cannot connect to HexStrike server")
-        return (
-            "❌ **Connection Error**: Cannot reach HexStrike Server.\n\n"
-            "**Fix it:**\n"
-            "```bash\n"
-            "sudo systemctl status hexstrike\n"
-            "sudo systemctl start hexstrike\n"
-            "```"
-        )
-    except requests.exceptions.Timeout:
-        return "⏱️ **Timeout**: Server is overloaded. Try again later."
-    except requests.exceptions.HTTPError as e:
-        if response.status_code == 401:
-            return "🔒 **Authentication Failed**: Check API token configuration."
-        elif response.status_code == 403:
-            return "🚫 **Forbidden**: Invalid permissions."
-        elif response.status_code == 429:
-            return "🐌 **Rate Limited**: Too many requests. Wait a moment."
-        return f"❌ **HTTP {response.status_code}**: {str(e)}"
-    except Exception as e:
-        logger.exception("Unexpected error")
-        return f"❌ **Error**: {str(e)}\n\nCheck logs: {LOG_DIR}/mcp.log"
+    return (
+        f"### 🛠️ Tool: {tool_name}\n"
+        f"**Target**: `{target}`\n"
+        f"**Status**: {status}\n"
+        f"**Job ID**: `{job_id}`\n\n"
+        f"📊 Check results with: `get_job_status('{job_id}')`"
+    )
 
 @mcp.tool()
 def get_job_status(job_id: str) -> str:
     """Check status of a previously queued job."""
-    if not job_id or len(job_id) != 36:
-        return "❌ Invalid job ID. Expected UUID format."
+    if not job_id or not isinstance(job_id, str):
+        return "❌ Invalid job ID. Expected string."
 
-    try:
-        response = _session.get(
-            f"{HEXSTRIKE_SERVER_URL}/api/jobs/{job_id}",
-            headers=_get_headers(),
-            timeout=10
-        )
-        response.raise_for_status()
-        job = response.json()
+    if len(job_id) != 36:
+        return "❌ Invalid job ID. Expected UUID format (36 characters)."
 
-        status = job.get("status", "unknown")
-        tool = job.get("tool", "unknown")
-        target = job.get("target", "unknown")
-        result = job.get("result", "No result yet")
-        created = job.get("created_at", "unknown")
+    result = _make_request("GET", f"/api/jobs/{job_id}", timeout=10)
 
-        emojis = {"queued": "⏳", "running": "🔄", "done": "✅", "failed": "❌"}
-        emoji = emojis.get(status, "❓")
-
-        return (
-            f"### 📋 Job Status: `{job_id[:8]}...`\n"
-            f"**Tool**: {tool}\n"
-            f"**Target**: `{target}`\n"
-            f"**Status**: {emoji} {status.upper()}\n"
-            f"**Created**: {created}\n\n"
-            f"**Result**:\n```\n{result}\n```"
-        )
-
-    except requests.exceptions.ConnectionError:
-        return "❌ Cannot connect to HexStrike server."
-    except requests.exceptions.HTTPError as e:
-        if response.status_code == 404:
+    if not result.get("success"):
+        if result.get("error") == "HTTP 404":
             return f"❌ Job `{job_id[:8]}...` not found."
-        return f"❌ HTTP Error: {response.status_code}"
-    except Exception as e:
-        logger.exception("Error checking job")
-        return f"❌ Error: {str(e)}"
+        return f"❌ **{result.get('error', 'Error')}**: {result.get('message', 'Unknown error')}"
+
+    job = result["data"]
+    status = job.get("status", "unknown")
+    tool = job.get("tool", "unknown")
+    target = job.get("target", "unknown")
+    result_text = job.get("result", "No result yet")
+    created = job.get("created_at", "unknown")
+    exit_code = job.get("exit_code")
+
+    emojis = {"queued": "⏳", "running": "🔄", "done": "✅", "failed": "❌"}
+    emoji = emojis.get(status, "❓")
+
+    exit_info = f"\n**Exit Code**: {exit_code}" if exit_code is not None else ""
+
+    return (
+        f"### 📋 Job Status: `{job_id[:8]}...`\n"
+        f"**Tool**: {tool}\n"
+        f"**Target**: `{target}`\n"
+        f"**Status**: {emoji} {status.upper()}\n"
+        f"**Created**: {created}{exit_info}\n\n"
+        f"**Result**:\n```\n{result_text}\n```"
+    )
 
 @mcp.tool()
 def get_system_status() -> str:
     """Check health of all NullSec components."""
     components = []
 
-    # HexStrike Server
-    try:
-        response = _session.get(f"{HEXSTRIKE_SERVER_URL}/health", headers=_get_headers(), timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            tools = list(data.get("tools", {}).keys()) if isinstance(data.get("tools"), dict) else data.get("tools", [])
-            version = data.get("version", "unknown")
-            components.append(f"✅ HexStrike Server v{version}")
-            components.append(f"   🛠️ Tools: {len(tools)} available")
-        else:
-            components.append(f"⚠️ HexStrike Server: HTTP {response.status_code}")
-    except requests.exceptions.ConnectionError:
-        components.append("❌ HexStrike Server: Offline")
-    except Exception as e:
-        components.append(f"❌ HexStrike Server: {str(e)}")
+    result = _make_request("GET", "/health", timeout=5)
+    if result.get("success"):
+        data = result["data"]
+        tools = list(data.get("tools", {}).keys()) if isinstance(data.get("tools"), dict) else data.get("tools", [])
+        version = data.get("version", "unknown")
+        components.append(f"✅ HexStrike Server v{version}")
+        components.append(f" 🛠️ Tools: {len(tools)} available")
+    else:
+        components.append(f"❌ HexStrike Server: {result.get('error', 'Offline')}")
 
-    # Worker
     try:
         import subprocess
-        result = subprocess.run(["systemctl", "is-active", "hexstrike-worker"],
-                                  capture_output=True, text=True, timeout=2)
-        if result.stdout.strip() == "active":
+        worker_result = subprocess.run(
+            ["systemctl", "is-active", "hexstrike-worker"],
+            capture_output=True, text=True, timeout=2
+        )
+        if worker_result.stdout.strip() == "active":
             components.append("✅ Worker: Active")
         else:
             components.append("⚠️ Worker: Inactive")
+    except FileNotFoundError:
+        components.append("❓ Worker: systemctl not available")
     except Exception:
         components.append("❓ Worker: Status unknown")
 
-    # API Token
     if API_TOKEN:
         components.append("🔐 API Token: Configured")
     else:
         components.append("⚠️ API Token: Not configured")
+
+    try:
+        import shutil
+        stat = shutil.disk_usage("/opt/nullsec")
+        free_gb = stat.free / (1024**3)
+        if free_gb < 1:
+            components.append(f"🔴 Disk Space: {free_gb:.1f}GB free (LOW)")
+        else:
+            components.append(f"✅ Disk Space: {free_gb:.1f}GB free")
+    except Exception:
+        pass
 
     return "\n".join(components)
 
@@ -278,6 +347,11 @@ def list_available_tools() -> str:
         "amass": "Attack surface mapping",
         "ffuf": "Web fuzzing & discovery",
         "nikto": "Web server vulnerability scanning",
+        "dirsearch": "Web path discovery",
+        "john": "Password hash cracking",
+        "hashcat": "GPU password cracking",
+        "whois": "Domain registration lookup",
+        "dig": "DNS lookup utility",
     }
 
     lines = ["### 🛠️ Available Security Tools\n"]
@@ -299,10 +373,27 @@ def scan_target(target: str, scan_type: str = "quick") -> str:
     if scan_type not in ["quick", "full", "stealth"]:
         return "❌ scan_type must be: quick, full, or stealth"
 
+    if not target or len(target) > 512:
+        return "❌ Invalid target"
+
+    forbidden = ["..", "$", "`", "|", ";", "&", ">", "<"]
+    if any(c in target for c in forbidden):
+        return "❌ Target contains forbidden characters"
+
     scans = {
-        "quick": [("nmap", "-sV -T4 --top-ports 100"), ("nikto", "-h")],
-        "full": [("nmap", "-sV -sC -O -T4 -p-"), ("nikto", "-h -C all"), ("gobuster", "dir -w /usr/share/wordlists/dirb/common.txt")],
-        "stealth": [("nmap", "-sS -T2 -p- --randomize-hosts"), ("subfinder", "-d")],
+        "quick": [
+            ("nmap", "-sV -T4 --top-ports 100"),
+            ("nikto", "-h"),
+        ],
+        "full": [
+            ("nmap", "-sV -sC -O -T4 -p-"),
+            ("nikto", "-h -C all"),
+            ("gobuster", "dir -w /usr/share/wordlists/dirb/common.txt"),
+        ],
+        "stealth": [
+            ("nmap", "-sS -T2 -p- --randomize-hosts"),
+            ("subfinder", "-d"),
+        ],
     }
 
     results = []
@@ -316,9 +407,75 @@ def scan_target(target: str, scan_type: str = "quick") -> str:
         "\n📊 Use `get_job_status('<job_id>')` for each job to retrieve full results."
     ])
 
+@mcp.tool()
+def diagnose_issue(error_message: str) -> str:
+    """Diagnose a specific error and suggest fixes."""
+    error_lower = error_message.lower()
+
+    diagnostics = {
+        "connection refused": [
+            "HexStrike server is not running.",
+            "Fix: `sudo systemctl start hexstrike`",
+            "Check: `sudo systemctl status hexstrike`",
+        ],
+        "connection error": [
+            "Cannot reach HexStrike server.",
+            "Fix: `sudo systemctl start hexstrike`",
+            "Verify: `curl http://localhost:8888/health`",
+        ],
+        "unauthorized": [
+            "API token missing or invalid.",
+            "Fix: `cat /etc/nullsec/api_token`",
+            "Regenerate: `sudo openssl rand -hex 32 > /etc/nullsec/api_token`",
+        ],
+        "forbidden": [
+            "Permission denied. Token mismatch between server and MCP.",
+            "Fix: Ensure API_TOKEN env var matches /etc/nullsec/api_token",
+        ],
+        "module not found": [
+            "Missing Python package in virtual environment.",
+            f"Fix: `sudo {sys.executable} -m pip install <missing_package>`",
+        ],
+        "port": [
+            "Port 8888 may be in use.",
+            "Fix: `sudo lsof -i :8888 && sudo kill <PID>`",
+            "Or: Edit /etc/systemd/system/hexstrike.service port",
+        ],
+        "virtual environment": [
+            "Virtual environment corrupted or missing.",
+            "Fix: `sudo rm -rf /opt/nullsec/venv && sudo ./install.sh --core`",
+        ],
+        "claude": [
+            "MCP configuration issue.",
+            "Fix: `sudo ./install.sh --mcp`",
+            "Check: `~/.config/Claude/claude_desktop_config.json`",
+        ],
+    }
+
+    lines = [f"### 🔍 Diagnosis: {error_message}", ""]
+
+    matched = False
+    for keyword, suggestions in diagnostics.items():
+        if keyword in error_lower:
+            lines.extend(suggestions)
+            matched = True
+            break
+
+    if not matched:
+        lines.extend([
+            "Unknown error. Running full system check...",
+            "If issues persist, re-run: `sudo ./install.sh --full`",
+            "Or run: `sudo guardian --check`",
+        ])
+
+    lines.append("")
+    lines.append("For more help, check logs: `sudo tail -f /var/log/nullsec/mcp.log`")
+
+    return "\n".join(lines)
+
 def main():
     logger.info("=" * 60)
-    logger.info("Starting HexStrike MCP Bridge v6.0")
+    logger.info("Starting HexStrike MCP Bridge v7.0")
     logger.info(f"Server URL: {HEXSTRIKE_SERVER_URL}")
     logger.info(f"API Token: {'✓ Configured' if API_TOKEN else '✗ Missing'}")
     logger.info("=" * 60)

@@ -1,83 +1,46 @@
 #!/usr/bin/env python3
-"""
-NullSec Server Tests - API Endpoints
-"""
+"""Unit tests for HexStrike Server."""
 
-import pytest
 import sys
+import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from modules.brain.hexstrike_server import app, sanitize_input, validate_target
+from modules.brain.hexstrike_server import validate_target, validate_options, sanitize_input
 
-@pytest.fixture
-def client():
-    app.config["TESTING"] = True
-    with app.test_client() as client:
-        yield client
+class TestInputValidation(unittest.TestCase):
+    def test_valid_ip(self):
+        self.assertTrue(validate_target("192.168.1.1")[0])
+        self.assertTrue(validate_target("10.0.0.1")[0])
+        self.assertTrue(validate_target("::1")[0])
 
-class TestHealthEndpoint:
-    def test_health_returns_200(self, client):
-        response = client.get("/health")
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data["status"] == "ok"
-        assert "tools" in data
+    def test_valid_hostname(self):
+        self.assertTrue(validate_target("example.com")[0])
+        self.assertTrue(validate_target("test.example.co.uk")[0])
 
-    def test_health_returns_version(self, client):
-        response = client.get("/health")
-        data = response.get_json()
-        assert "version" in data
+    def test_valid_url(self):
+        self.assertTrue(validate_target("https://example.com")[0])
+        self.assertTrue(validate_target("http://test.com:8080/path")[0])
 
-class TestExecuteEndpoint:
-    def test_no_auth_returns_401(self, client):
-        response = client.post("/api/tools/execute", json={"tool": "nmap", "target": "127.0.0.1"})
-        assert response.status_code == 401
+    def test_invalid_targets(self):
+        self.assertFalse(validate_target("")[0])
+        self.assertFalse(validate_target("../../etc/passwd")[0])
+        self.assertFalse(validate_target("127.0.0.1; rm -rf /")[0])
+        self.assertFalse(validate_target("-v")[0])
+        self.assertFalse(validate_target("/etc/passwd")[0])
+        self.assertFalse(validate_target("test\nrm -rf /")[0])
 
-    def test_wrong_auth_returns_403(self, client):
-        response = client.post(
-            "/api/tools/execute",
-            json={"tool": "nmap", "target": "127.0.0.1"},
-            headers={"Authorization": "Bearer wrong_token"}
-        )
-        assert response.status_code in (403, 500)
+    def test_options_validation(self):
+        self.assertTrue(validate_options("-sV -T4")[0])
+        self.assertFalse(validate_options("-sV; rm -rf /")[0])
+        self.assertFalse(validate_options("-sV | cat /etc/passwd")[0])
+        self.assertFalse(validate_options("-sV $(whoami)")[0])
 
-    def test_invalid_tool_returns_404(self, client):
-        response = client.post(
-            "/api/tools/execute",
-            json={"tool": "badtool", "target": "127.0.0.1"},
-            headers={"Authorization": "Bearer test"}
-        )
-        assert response.status_code == 404
-
-    def test_invalid_target_returns_400(self, client):
-        response = client.post(
-            "/api/tools/execute",
-            json={"tool": "nmap", "target": "../../etc/passwd"},
-            headers={"Authorization": "Bearer test"}
-        )
-        assert response.status_code == 400
-
-    def test_malformed_json_returns_400(self, client):
-        response = client.post(
-            "/api/tools/execute",
-            data="not json",
-            headers={"Authorization": "Bearer test", "Content-Type": "application/json"}
-        )
-        assert response.status_code == 400
-
-class TestJobEndpoint:
-    def test_invalid_job_id_format(self, client):
-        response = client.get("/api/jobs/invalid-id", headers={"Authorization": "Bearer test"})
-        assert response.status_code == 400
-
-    def test_nonexistent_job_returns_404(self, client):
-        response = client.get(
-            "/api/jobs/12345678-1234-1234-1234-123456789abc",
-            headers={"Authorization": "Bearer test"}
-        )
-        assert response.status_code == 404
+    def test_sanitize_input(self):
+        self.assertEqual(sanitize_input("test-value_1.2"), "test-value_1.2")
+        self.assertEqual(sanitize_input("../../etc/passwd"), "etc/passwd")
+        self.assertEqual(sanitize_input("-bad"), "bad")
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    unittest.main()

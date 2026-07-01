@@ -2,7 +2,7 @@
 Description=HexStrike Worker Service
 Documentation=https://github.com/Panda1847/NullSec-RedTeam-AI
 After=network.target hexstrike.service
-Requires=hexstrike.service
+Wants=hexstrike.service
 
 [Service]
 Type=simple

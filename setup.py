@@ -5,11 +5,16 @@ Enterprise-grade AI-powered offensive security platform.
 """
 from setuptools import setup, find_packages
 from pathlib import Path
+import sys
 
-VERSION = "6.0.0"
+VERSION = "7.0.0"
 
 readme_file = Path(__file__).parent / "README.md"
 long_description = readme_file.read_text(encoding="utf-8") if readme_file.exists() else ""
+
+# Ensure Python 3.10+
+if sys.version_info < (3, 10):
+    raise RuntimeError("Python 3.10+ is required")
 
 setup(
     name="nullsec-redteam-ai",
@@ -22,7 +27,9 @@ setup(
     url="https://github.com/Panda1847/NullSec-RedTeam-AI",
     license="MIT",
 
-    packages=find_packages(include=["modules", "modules.*", "utils", "utils.*", "tests", "tests.*"]),
+    packages=find_packages(
+        include=["modules", "modules.*", "utils", "utils.*", "tests", "tests.*"]
+    ),
     package_dir={"": "."},
 
     package_data={
@@ -46,6 +53,7 @@ setup(
         "flask-limiter>=3.5.0",
         "cryptography>=41.0.0",
         "pydantic>=2.0.0",
+        "urllib3>=2.0.0",
     ],
 
     extras_require={
@@ -88,6 +96,7 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Operating System :: POSIX :: Linux",
         "Environment :: Console",
         "Natural Language :: English",

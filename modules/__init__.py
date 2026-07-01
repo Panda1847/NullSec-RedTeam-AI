@@ -1,2 +1,1 @@
-"""NullSec Red Team AI - Core Modules"""
-__version__ = "6.0.0"
+"""NullSec Red Team AI - Modules Package"""

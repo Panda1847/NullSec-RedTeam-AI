@@ -24,8 +24,11 @@ flask-limiter>=3.5.0
 # Image Processing
 Pillow>=10.0.0
 
-# Database
-sqlite3-python  # built-in, listed for clarity
+# Database (sqlite3 is built-in, but we list it for clarity)
+# sqlite3 is part of Python standard library
 
 # Async Support (for future expansion)
-# asyncio  # built-in Python 3.10+
+# asyncio is built-in Python 3.10+
+
+# JSON handling
+# json is built-in Python 3.10+

@@ -1,1 +1,1 @@
-"""HexStrike Brain - Orchestration & MCP"""
+"""NullSec Brain Module"""

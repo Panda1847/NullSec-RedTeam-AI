@@ -1,1 +1,1 @@
-"""NullSec Frontend - Dashboard & Web UI"""
+"""NullSec Frontend Module"""

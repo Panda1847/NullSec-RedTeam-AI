@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  NullSec Core Utilities v6.0                                                  ║
-║  Decorators, animations, and safe execution primitives                         ║
+║ NullSec Core Utilities v7.0                                                 ║
+║ Decorators, animations, and safe execution primitives                       ║
+║ Kali Linux Optimized • Self-healing • Fault-tolerant                        ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -16,7 +17,7 @@ import os
 import functools
 import traceback
 import re
-from typing import Callable, Any, Optional
+from typing import Callable, Any, Optional, Tuple
 
 # ─── Logger ──────────────────────────────────────────────────────────────────
 logger = logging.getLogger("nullsec.core")
@@ -26,8 +27,8 @@ class PacmanLoading:
     """BlackArch-style pacman loading animation."""
 
     FRAMES = [
-        "C . . .", "c . . .", " C . .", " c . .",
-        " C .", " c .", " C", " c",
+        "C . . .", "c . . .", "  C . .", "  c . .",
+        "    C .", "    c .", "      C", "      c",
     ]
 
     def __init__(self, message: str = "Loading", delay: float = 0.1):
@@ -74,7 +75,8 @@ def with_pacman(message: str = "Processing"):
     return decorator
 
 # ─── Self-Healing Decorator ──────────────────────────────────────────────────
-def self_heal(max_retries: int = 3, delay: float = 2.0, backoff: float = 2.0):
+def self_heal(max_retries: int = 3, delay: float = 2.0, backoff: float = 2.0,
+              on_error: Optional[Callable] = None):
     """
     Decorator that auto-retries failed functions with exponential backoff.
     Attempts basic fixes for common errors.
@@ -96,6 +98,8 @@ def self_heal(max_retries: int = 3, delay: float = 2.0, backoff: float = 2.0):
                     if retries >= max_retries:
                         logger.critical(f"[FATAL] {func.__name__} failed after {max_retries} retries")
                         traceback.print_exc()
+                        if on_error:
+                            on_error(e)
                         raise
 
                     # Auto-fix attempts
@@ -106,23 +110,39 @@ def self_heal(max_retries: int = 3, delay: float = 2.0, backoff: float = 2.0):
                         match = re.search(r'port (\d+)', error_msg)
                         port = match.group(1) if match else "8888"
                         logger.info(f"[GUARDIAN] Attempting to free port {port}")
-                        subprocess.run(["fuser", "-k", f"{port}/tcp"], 
-                                     capture_output=True, timeout=5)
-                        fixed = True
+                        try:
+                            subprocess.run(["fuser", "-k", f"{port}/tcp"],
+                                         capture_output=True, timeout=5)
+                            fixed = True
+                        except Exception:
+                            pass
 
                     # Missing module
                     elif "ModuleNotFoundError" in error_msg or "No module named" in error_msg:
-                        match = re.search(r"'([^']+)'", error_msg)
+                        match = re.search(r"'(\w+)'", error_msg)
                         module = match.group(1) if match else None
                         if module:
                             logger.info(f"[GUARDIAN] Installing missing module: {module}")
-                            subprocess.run([sys.executable, "-m", "pip", "install", module],
-                                         capture_output=True, timeout=60)
-                            fixed = True
+                            try:
+                                subprocess.run([sys.executable, "-m", "pip", "install", module],
+                                             capture_output=True, timeout=60)
+                                fixed = True
+                            except Exception:
+                                pass
 
                     # Permission denied
                     elif "permission denied" in error_msg.lower():
                         logger.warning("[GUARDIAN] Permission denied. Try running with sudo.")
+
+                    # Connection refused
+                    elif "connection refused" in error_msg.lower():
+                        logger.info("[GUARDIAN] Connection refused. Attempting to start service...")
+                        try:
+                            subprocess.run(["systemctl", "start", "hexstrike"],
+                                         capture_output=True, timeout=10)
+                            fixed = True
+                        except Exception:
+                            pass
 
                     if fixed:
                         logger.info(f"[GUARDIAN] Retry {retries}/{max_retries} in {current_delay}s...")
@@ -137,8 +157,8 @@ def self_heal(max_retries: int = 3, delay: float = 2.0, backoff: float = 2.0):
     return decorator
 
 # ─── Safe Command Execution ──────────────────────────────────────────────────
-def safe_run(cmd: str, shell: bool = False, timeout: Optional[int] = 30,
-             cwd: Optional[str] = None, env: Optional[dict] = None) -> tuple[int, str, str]:
+def safe_run(cmd, shell: bool = False, timeout: Optional[int] = 30,
+             cwd: Optional[str] = None, env: Optional[dict] = None) -> Tuple[int, str, str]:
     """
     Safely execute a command with timeout and error handling.
 
@@ -176,6 +196,9 @@ def safe_run(cmd: str, shell: bool = False, timeout: Optional[int] = 30,
     except FileNotFoundError:
         logger.error(f"Command not found: {cmd}")
         return 127, "", "Command not found"
+    except PermissionError:
+        logger.error(f"Permission denied: {cmd}")
+        return 126, "", "Permission denied"
     except Exception as e:
         logger.error(f"Command failed: {cmd} — {e}")
         return 1, "", str(e)
@@ -193,18 +216,61 @@ def validate_ip(target: str) -> bool:
 def validate_hostname(hostname: str) -> bool:
     """Validate hostname format."""
     import re
+    if not hostname or len(hostname) > 253:
+        return False
     pattern = re.compile(
         r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*'
         r'[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'
     )
     return bool(pattern.match(hostname))
 
+def validate_url(url: str) -> bool:
+    """Validate URL format."""
+    import re
+    if not url or len(url) > 2048:
+        return False
+    pattern = re.compile(
+        r'^https?://(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*'
+        r'[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?::\d{1,5})?(?:/.*)?$'
+    )
+    return bool(pattern.match(url))
+
 def sanitize_filename(filename: str) -> str:
     """Sanitize a filename to prevent path traversal."""
     import re
-    filename = re.sub(r'[<>:"/\\|?*]', '', filename)
+    if not filename:
+        return "unnamed"
+    filename = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', filename)
     filename = filename.replace('..', '')
-    return filename.strip()[:255]
+    return filename.strip()[:255] or "unnamed"
+
+def sanitize_path(path: str, allowed_base: Optional[str] = None) -> str:
+    """Sanitize a path and optionally restrict to allowed base directory."""
+    from pathlib import Path
+
+    if not path:
+        return "."
+
+    # Normalize path
+    try:
+        p = Path(path).resolve()
+    except (OSError, ValueError):
+        return "."
+
+    # Check for path traversal
+    if ".." in path:
+        return "."
+
+    # Check allowed base
+    if allowed_base:
+        try:
+            base = Path(allowed_base).resolve()
+            if not str(p).startswith(str(base)):
+                return str(base)
+        except (OSError, ValueError):
+            pass
+
+    return str(p)
 
 # ─── Timer Context Manager ───────────────────────────────────────────────────
 class Timer:
@@ -222,3 +288,42 @@ class Timer:
     def __exit__(self, *args):
         self.elapsed = time.time() - self.start_time
         logger.info(f"{self.name} completed in {self.elapsed:.3f}s")
+
+# ─── Retry Utility ───────────────────────────────────────────────────────────
+def retry(max_attempts: int = 3, delay: float = 1.0, backoff: float = 2.0,
+          exceptions: Tuple[type, ...] = (Exception,)):
+    """Retry decorator with configurable exceptions."""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            attempt = 1
+            current_delay = delay
+
+            while attempt <= max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    if attempt == max_attempts:
+                        raise
+                    logger.warning(f"{func.__name__} attempt {attempt}/{max_attempts} failed: {e}")
+                    time.sleep(current_delay)
+                    current_delay *= backoff
+                    attempt += 1
+
+            return None
+        return wrapper
+    return decorator
+
+# ─── Health Check Utility ────────────────────────────────────────────────────
+def check_service_health(url: str, timeout: int = 5) -> Tuple[bool, str]:
+    """Check if a service is healthy."""
+    try:
+        import requests
+        resp = requests.get(url, timeout=timeout)
+        return resp.status_code == 200, f"HTTP {resp.status_code}"
+    except requests.exceptions.ConnectionError:
+        return False, "Connection refused"
+    except requests.exceptions.Timeout:
+        return False, "Timeout"
+    except Exception as e:
+        return False, str(e)
