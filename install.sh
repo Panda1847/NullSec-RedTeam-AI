@@ -205,13 +205,14 @@ check_nodejs() {
                     [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
                     nvm install 20 2>/dev/null && nvm use 20 2>/dev/null
 
-                    # Create symlinks
-                    if [[ -f "$NVM_DIR/versions/node/v20.*/bin/node" ]]; then
-                        local node_path=$(ls "$NVM_DIR/versions/node/v20.*/bin/node" 2>/dev/null | head -1)
-                        [[ -n "$node_path" ]] && ln -sf "$node_path" /usr/local/bin/node 2>/dev/null || true
-                        local npm_path=$(ls "$NVM_DIR/versions/node/v20.*/bin/npm" 2>/dev/null | head -1)
-                        [[ -n "$npm_path" ]] && ln -sf "$npm_path" /usr/local/bin/npm 2>/dev/null || true
-                    fi
+                    # Create symlinks — use find to expand the version glob correctly;
+                    # ls with glob inside double-quotes never expands in bash.
+                    local node_path
+                    node_path=$(find "$NVM_DIR/versions/node" -name "node" -path "*/v20.*/bin/node" 2>/dev/null | head -1)
+                    [[ -n "$node_path" ]] && ln -sf "$node_path" /usr/local/bin/node 2>/dev/null || true
+                    local npm_path
+                    npm_path=$(find "$NVM_DIR/versions/node" -name "npm" -path "*/v20.*/bin/npm" 2>/dev/null | head -1)
+                    [[ -n "$npm_path" ]] && ln -sf "$npm_path" /usr/local/bin/npm 2>/dev/null || true
                 fi
             fi
         fi
@@ -279,12 +280,15 @@ check_system_deps() {
     if [[ ${#failed_deps[@]} -gt 0 ]]; then
         warn "Attempting fallback installs for: ${failed_deps[*]}"
 
-        # dirsearch fallback
+        # dirsearch fallback — use pipx or venv pip to avoid PEP 668
+        # rejection on Kali 2024+ (externally-managed-environment error)
         if [[ " ${failed_deps[*]} " =~ " dirsearch " ]]; then
-            if command -v pip3 &>/dev/null; then
-                pip3 install dirsearch 2>/dev/null && log "dirsearch installed via pip3 ✓" || warn "dirsearch pip fallback failed"
-            elif command -v pip &>/dev/null; then
-                pip install dirsearch 2>/dev/null && log "dirsearch installed via pip ✓" || warn "dirsearch pip fallback failed"
+            if command -v pipx &>/dev/null; then
+                pipx install dirsearch 2>/dev/null && log "dirsearch installed via pipx ✓" || warn "dirsearch pipx fallback failed"
+            elif [[ -f "$VENV_PATH/bin/pip" ]]; then
+                "$VENV_PATH/bin/pip" install dirsearch 2>/dev/null && log "dirsearch installed into venv ✓" || warn "dirsearch venv pip fallback failed"
+            else
+                warn "dirsearch unavailable — pip blocked by PEP 668 and venv not yet ready"
             fi
         fi
 
@@ -1015,11 +1019,11 @@ main() {
     info "Elevated: $MODE_ELEVATED"
 
     check_root
+    setup_env
     check_python
     check_git
     check_nodejs
     check_system_deps
-    setup_env
 
     if [[ "$MODE_FULL" == true || "$MODE_CORE" == true ]]; then
         install_hexstrike_core
