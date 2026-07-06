@@ -11,7 +11,7 @@ requests>=2.31.0
 urllib3>=2.0.0
 
 # MCP Integration
-fastmcp>=0.4.0
+fastmcp>=0.9.0
 
 # Security & Crypto
 cryptography>=41.0.0

@@ -45,7 +45,7 @@ setup(
     install_requires=[
         "flask>=2.3.0",
         "requests>=2.31.0",
-        "fastmcp>=0.4.0",
+        "fastmcp>=0.9.0",
         "Pillow>=10.0.0",
         "psutil>=5.9.0",
         "Werkzeug>=2.3.0",
@@ -73,7 +73,7 @@ setup(
         ],
         "monitoring": [
             "prometheus-client>=0.17.0",
-            "grafana-api>=1.0.0",
+            "grafana-client>=3.0.0",
         ],
     },
 
