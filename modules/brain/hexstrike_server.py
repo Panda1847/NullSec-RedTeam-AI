@@ -220,7 +220,7 @@ def sanitize_input(text: str, allow_spaces: bool = True, max_len: int = 1024) ->
     Aggressive input sanitization. Prevents command injection & path traversal.
     Only allows: alphanumeric, hyphen, underscore, dot, slash (for paths), and optionally spaces.
     """
-    if text is None:
+    if text is None or not isinstance(text, str):
         return ""
 
     text = str(text)[:max_len]
@@ -228,7 +228,7 @@ def sanitize_input(text: str, allow_spaces: bool = True, max_len: int = 1024) ->
     # Strip path traversal sequences
     text = text.replace("..", "").replace("//", "").replace("\\\\", "")
 
-    allowed = set("-_.")
+    allowed = set("-_./")
     if allow_spaces:
         allowed.add(" ")
 
@@ -246,8 +246,8 @@ def validate_target(target: str) -> Tuple[bool, Optional[str]]:
     Validate target is a legitimate IP, hostname, or URL.
     Returns (is_valid, error_message).
     """
-    if not target:
-        return False, "Target is required"
+    if not target or not isinstance(target, str):
+        return False, "Target must be a string"
 
     if len(target) > 512:
         return False, "Target exceeds maximum length (512 chars)"
@@ -287,7 +287,7 @@ def validate_target(target: str) -> Tuple[bool, Optional[str]]:
 
 def validate_options(options: str) -> Tuple[bool, Optional[str]]:
     """Validate tool options to prevent injection."""
-    if not options:
+    if not options or not isinstance(options, str):
         return True, None
 
     # Block dangerous characters
@@ -395,7 +395,7 @@ def health_check():
 
 @app.route("/api/tools/execute", methods=["POST"])
 @require_token
-@limiter.limit("10 per minute")
+@limiter.limit("200 per minute")
 def execute_tool():
     """Queue a security tool execution job."""
     if not request.is_json:

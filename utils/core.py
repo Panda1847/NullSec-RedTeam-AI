@@ -251,26 +251,29 @@ def sanitize_path(path: str, allowed_base: Optional[str] = None) -> str:
     if not path:
         return "."
 
-    # Normalize path
-    try:
-        p = Path(path).resolve()
-    except (OSError, ValueError):
-        return "."
-
-    # Check for path traversal
+    # Check for path traversal before any resolution
     if ".." in path:
         return "."
 
-    # Check allowed base
+    # If allowed_base is given and path is relative, join with base
     if allowed_base:
         try:
             base = Path(allowed_base).resolve()
-            if not str(p).startswith(str(base)):
+            joined = (base / path).resolve()
+            # Verify the resolved path is within the base directory
+            if str(joined).startswith(str(base)):
+                return str(joined)
+            else:
                 return str(base)
         except (OSError, ValueError):
             pass
 
-    return str(p)
+    # Normalize path (no allowed_base, or base handling failed)
+    try:
+        p = Path(path).resolve()
+        return str(p)
+    except (OSError, ValueError):
+        return "."
 
 # ─── Timer Context Manager ───────────────────────────────────────────────────
 class Timer:

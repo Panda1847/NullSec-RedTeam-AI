@@ -17,7 +17,7 @@ import logging
 import tempfile
 import atexit
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent.parent
 if str(SCRIPT_DIR) not in sys.path:

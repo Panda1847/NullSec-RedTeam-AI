@@ -325,7 +325,11 @@ class JobStore:
                     FROM jobs
                 """)
                 row = cur.fetchone()
-                return dict(row) if row else {"total": 0, "queued": 0, "running": 0, "done": 0, "failed": 0}
+                if row:
+                    d = dict(row)
+                    # SUM over empty table returns None in SQLite
+                    return {k: (v if v is not None else 0) for k, v in d.items()}
+                return {"total": 0, "queued": 0, "running": 0, "done": 0, "failed": 0}
             except sqlite3.Error as e:
                 raise JobStoreError(f"Failed to get stats: {e}")
 
