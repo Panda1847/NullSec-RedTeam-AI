@@ -1,16 +1,16 @@
 #!/bin/bash
 # ==============================================================================
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║ NULLSEC RED TEAM AI — UNIFIED HARDENED INSTALLER v7.0 ║
+# ║ NULLSEC RED TEAM AI — UNIFIED HARDENED INSTALLER v7.0                          ║
 # ║ Stress-Tested on Kali 2024.4 • Debian 12 • Ubuntu 24.04 • ARM64/x86_64 ║
-# ║ Production-Ready • Self-Healing • Comprehensive Fallback Logic ║
+# ║ Production-Ready • Self-Healing • Comprehensive Fallback Logic             ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 # ==============================================================================
 
 set -euo pipefail
 shopt -s nullglob
 
-# ─── Configuration ───────────────────────────────────────────────────────────
+# ─── Configuration ────────────────────────────────────────────────────────────────
 INSTALL_DIR="/opt/nullsec"
 VENV_PATH="$INSTALL_DIR/venv"
 LOG_DIR="/var/log/nullsec"
@@ -22,8 +22,7 @@ REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME=$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f6 || echo "$HOME")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ─── Installation Modes ──────────────────────────────────────────────────────
-MODE_FULL=false
+# ─── Installation Modes ────────────────────────────────────────────────────────────────MODE_FULL=false
 MODE_CORE=false
 MODE_DESKTOP=false
 MODE_MCP=false
@@ -32,8 +31,7 @@ MODE_ELEVATED=false
 DRY_RUN=false
 STRESS_TEST=false
 
-# ─── Colors ──────────────────────────────────────────────────────────────────
-RED='\033[0;31m'
+# ─── Colors ────────────────────────────────────────────────────────────────────────────RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
@@ -43,8 +41,7 @@ WHITE='\033[1;37m'
 NC='\033[0m'
 BOLD='\033[1m'
 
-# ─── Banner ──────────────────────────────────────────────────────────────────
-print_banner() {
+# ─── Banner ────────────────────────────────────────────────────────────────────────────print_banner() {
     echo -e "${CYAN}"
     cat <<"EOF"
  ███╗   ██╗██╗   ██╗██╗     ███████╗███████╗ ██████╗
@@ -58,8 +55,7 @@ EOF
     echo -e "${BLUE} ─────────────────────────────────────────────────────────${NC}"
 }
 
-# ─── Logging ─────────────────────────────────────────────────────────────────
-log() {
+# ─── Logging ─────────────────────────────────────────────────────────────────────────────log() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] [+] $1"
     echo -e "${GREEN}${BOLD}[✓]${NC} ${GREEN}$1${NC}"
     [[ "$DRY_RUN" == false ]] && echo "$msg" >> "$LOG_FILE" 2>/dev/null || true
@@ -82,8 +78,7 @@ info() {
     echo -e "${BLUE}${BOLD}[i]${NC} ${BLUE}$1${NC}"
 }
 
-# ─── Safe Command Runner with Fallback ─────────────────────────────────────
-run_cmd() {
+# ─── Safe Command Runner with Fallback ─────────────────────────────────────────────run_cmd() {
     local cmd="$1"
     local timeout_sec="${2:-60}"
     local retries="${3:-1}"
@@ -102,8 +97,7 @@ run_cmd() {
     return 1
 }
 
-# ─── Pre-flight Checks ─────────────────────────────────────────────────────
-check_root() {
+# ─── Pre-flight Checks ───────────────────────────────────────────────────────────────────check_root() {
     if [[ $EUID -ne 0 ]]; then
         error "This script must be run as root. Use: sudo $0 [options]"
     fi
@@ -205,8 +199,8 @@ check_nodejs() {
                     [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
                     nvm install 20 2>/dev/null && nvm use 20 2>/dev/null
 
-                    # Create symlinks — use find to expand the version glob correctly;
-                    # ls with glob inside double-quotes never expands in bash.
+                    # Create symlinks — use find for glob expansion
+                    # (ls "$NVM_DIR/.../v20.*/bin/node" won't glob inside double-quotes)
                     local node_path
                     node_path=$(find "$NVM_DIR/versions/node" -name "node" -path "*/v20.*/bin/node" 2>/dev/null | head -1)
                     [[ -n "$node_path" ]] && ln -sf "$node_path" /usr/local/bin/node 2>/dev/null || true
@@ -245,8 +239,7 @@ check_git() {
     fi
 }
 
-# ─── System Dependencies with Robust Fallback ──────────────────────────────
-check_system_deps() {
+# ─── System Dependencies with Robust Fallback ──────────────────────────────────────────check_system_deps() {
     log "Installing system dependencies..."
 
     local deps=(
@@ -280,15 +273,14 @@ check_system_deps() {
     if [[ ${#failed_deps[@]} -gt 0 ]]; then
         warn "Attempting fallback installs for: ${failed_deps[*]}"
 
-        # dirsearch fallback — use pipx or venv pip to avoid PEP 668
-        # rejection on Kali 2024+ (externally-managed-environment error)
+        # dirsearch fallback — use pipx or venv pip to avoid PEP 668 rejection on Kali
         if [[ " ${failed_deps[*]} " =~ " dirsearch " ]]; then
             if command -v pipx &>/dev/null; then
                 pipx install dirsearch 2>/dev/null && log "dirsearch installed via pipx ✓" || warn "dirsearch pipx fallback failed"
             elif [[ -f "$VENV_PATH/bin/pip" ]]; then
                 "$VENV_PATH/bin/pip" install dirsearch 2>/dev/null && log "dirsearch installed into venv ✓" || warn "dirsearch venv pip fallback failed"
             else
-                warn "dirsearch unavailable — pip blocked by PEP 668 and venv not yet ready"
+                warn "dirsearch unavailable — PEP 668 blocks bare pip on Kali and venv not yet ready"
             fi
         fi
 
@@ -355,8 +347,7 @@ check_system_deps() {
     fi
 }
 
-# ─── Environment Setup ───────────────────────────────────────────────────────
-setup_env() {
+# ─── Environment Setup ───────────────────────────────────────────────────────────────────────────setup_env() {
     log "Setting up environment..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -388,8 +379,7 @@ setup_env() {
     done
 }
 
-# ─── Claude Desktop Installation with Multiple Fallbacks ─────────────────────
-install_claude_desktop() {
+# ─── Claude Desktop Installation with Multiple Fallbacks ─────────────────────────────install_claude_desktop() {
     log "Installing Claude Desktop for Linux..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -483,8 +473,7 @@ WRAPPER
     chown -R "$REAL_USER:$REAL_USER" "$mcp_dir" 2>/dev/null || true
 }
 
-# ─── Core Installation with Safety Checks ────────────────────────────────────
-install_hexstrike_core() {
+# ─── Core Installation with Safety Checks ──────────────────────────────────────────────install_hexstrike_core() {
     log "Installing HexStrike Core..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -568,8 +557,7 @@ install_hexstrike_core() {
     cd "$SCRIPT_DIR"
 }
 
-# ─── MCP Configuration with Validation ───────────────────────────────────────
-setup_mcp() {
+# ─── MCP Configuration with Validation ───────────────────────────────────────────────────────────────setup_mcp() {
     log "Configuring MCP Bridge..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -625,8 +613,7 @@ EOF
     log "MCP configuration written to $mcp_config ✓"
 }
 
-# ─── Systemd Services with Hardening ───────────────────────────────────────
-setup_persistence() {
+# ─── Systemd Services with Hardening ───────────────────────────────────────────────────────────────────setup_persistence() {
     log "Setting up systemd services..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -746,8 +733,7 @@ EOF
     fi
 }
 
-# ─── Guardian Installation ───────────────────────────────────────────────────
-install_guardian() {
+# ─── Guardian Installation ────────────────────────────────────────────────────────────────────────────install_guardian() {
     log "Installing Guardian diagnostic tool..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -778,8 +764,7 @@ GUARDIAN_EOF
     log "Guardian installed at /usr/local/bin/guardian ✓"
 }
 
-# ─── User & Permissions ──────────────────────────────────────────────────────
-setup_permissions() {
+# ─── User & Permissions ────────────────────────────────────────────────────────────────────────────setup_permissions() {
     log "Configuring permissions..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -801,8 +786,7 @@ setup_permissions() {
     chmod 770 "$INSTALL_DIR/jobs"
 }
 
-# ─── AI Security Lab Deployment ──────────────────────────────────────────────
-deploy_lab() {
+# ─── AI Security Lab Deployment ──────────────────────────────────────────────────────────────────────────deploy_lab() {
     log "Deploying AI Security Lab..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -822,8 +806,7 @@ deploy_lab() {
     fi
 }
 
-# ─── Workspace Isolation ─────────────────────────────────────────────────────
-setup_workspace() {
+# ─── Workspace Isolation ────────────────────────────────────────────────────────────────────────────setup_workspace() {
     local workspace="$REAL_HOME/$WORKSPACE_DIR"
     mkdir -p "$workspace"/{tools,reports,targets,logs,wordlists}
     chown -R "$REAL_USER:$REAL_USER" "$workspace" 2>/dev/null || true
@@ -854,8 +837,7 @@ EOF
     chmod 600 "$config_file"
 }
 
-# ─── Verification ────────────────────────────────────────────────────────────
-verify_installation() {
+# ─── Verification ─────────────────────────────────────────────────────────────────────────────────verify_installation() {
     log "Verifying installation..."
 
     local issues=0
@@ -902,8 +884,7 @@ verify_installation() {
     fi
 }
 
-# ─── Stress Test with Multiple Scenarios ─────────────────────────────────────
-run_stress_test() {
+# ─── Stress Test with Multiple Scenarios ─────────────────────────────────────────────────────────────run_stress_test() {
     log "Running stress tests..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -956,8 +937,7 @@ run_stress_test() {
     pkill -f "hexstrike_server" 2>/dev/null || true
 }
 
-# ─── Usage ───────────────────────────────────────────────────────────────────
-usage() {
+# ─── Usage ───────────────────────────────────────────────────────────────────────────────────usage() {
     cat <<EOF
 ${CYAN}Usage: sudo ./install.sh [OPTIONS]${NC}
 
@@ -981,8 +961,7 @@ ${BOLD}Examples:${NC}
 EOF
 }
 
-# ─── Argument Parsing ────────────────────────────────────────────────────────
-parse_args() {
+# ─── Argument Parsing ──────────────────────────────────────────────────────────────────────────────parse_args() {
     if [[ $# -eq 0 ]]; then
         MODE_FULL=true
     fi
@@ -1009,8 +988,7 @@ parse_args() {
     fi
 }
 
-# ─── Main ────────────────────────────────────────────────────────────────────
-main() {
+# ─── Main ──────────────────────────────────────────────────────────────────────────────────────────main() {
     parse_args "$@"
     print_banner
 
