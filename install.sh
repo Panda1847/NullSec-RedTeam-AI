@@ -359,8 +359,6 @@ check_system_deps() {
 
 # ─── Environment Setup ───────────────────────────────────────────────────────────────────────────
 setup_env() {
-    log "Setting up environment..."
-
     if [[ "$DRY_RUN" == true ]]; then
         info "DRY-RUN: Would create: $INSTALL_DIR, $LOG_DIR, $CONFIG_DIR, $REAL_HOME/$WORKSPACE_DIR"
         return
@@ -368,6 +366,7 @@ setup_env() {
 
     mkdir -p "$INSTALL_DIR" "$LOG_DIR" "$CONFIG_DIR" "$REAL_HOME/$WORKSPACE_DIR"
     touch "$LOG_FILE"
+    log "Setting up environment..."
     chmod 755 "$LOG_DIR"
     chmod 600 "$LOG_FILE" 2>/dev/null || true
     chown "$REAL_USER:$REAL_USER" "$REAL_HOME/$WORKSPACE_DIR" 2>/dev/null || true
@@ -386,6 +385,7 @@ setup_env() {
 
     # Create Python package __init__.py files
     for pkg in modules modules/brain modules/worker modules/payloads modules/frontend utils tests; do
+        mkdir -p "$INSTALL_DIR/$pkg"
         touch "$INSTALL_DIR/$pkg/__init__.py"
     done
 }
