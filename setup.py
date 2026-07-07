@@ -36,7 +36,6 @@ setup(
         "modules": ["*/requirements.txt"],
         "systemd": ["*.service"],
         "scripts": ["*.sh"],
-        "config": ["*.json", "*.yaml", "*.yml"],
     },
     include_package_data=True,
 

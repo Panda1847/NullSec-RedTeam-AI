@@ -22,7 +22,8 @@ REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME=$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f6 || echo "$HOME")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ─── Installation Modes ────────────────────────────────────────────────────────────────MODE_FULL=false
+# ─── Installation Modes ────────────────────────────────────────────────────────────────
+MODE_FULL=false
 MODE_CORE=false
 MODE_DESKTOP=false
 MODE_MCP=false
@@ -31,7 +32,8 @@ MODE_ELEVATED=false
 DRY_RUN=false
 STRESS_TEST=false
 
-# ─── Colors ────────────────────────────────────────────────────────────────────────────RED='\033[0;31m'
+# ─── Colors ────────────────────────────────────────────────────────────────────────────
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
@@ -41,13 +43,14 @@ WHITE='\033[1;37m'
 NC='\033[0m'
 BOLD='\033[1m'
 
-# ─── Banner ────────────────────────────────────────────────────────────────────────────print_banner() {
+# ─── Banner ────────────────────────────────────────────────────────────────────────────
+print_banner() {
     echo -e "${CYAN}"
     cat <<"EOF"
  ███╗   ██╗██╗   ██╗██╗     ███████╗███████╗ ██████╗
  ████╗  ██║██║   ██║██║     ██╔════╝██╔════╝██╔════╝
- ██╔██╗ ██║██║   ██║██║     ███████╗█████╗  ██║     
- ██║╚██╗██║██║   ██║██║     ╚════██║██╔══╝  ██║     
+ ██╔██╗ ██║██║   ██║██║     ███████╗█████╗  ██║
+ ██║╚██╗██║██║   ██║██║     ╚════██║██╔══╝  ██║
  ██║ ╚████║╚██████╔╝███████╗███████║███████╗╚██████╗
  ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝╚══════╝ ╚═════╝
 EOF
@@ -55,7 +58,8 @@ EOF
     echo -e "${BLUE} ─────────────────────────────────────────────────────────${NC}"
 }
 
-# ─── Logging ─────────────────────────────────────────────────────────────────────────────log() {
+# ─── Logging ─────────────────────────────────────────────────────────────────────────────
+log() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] [+] $1"
     echo -e "${GREEN}${BOLD}[✓]${NC} ${GREEN}$1${NC}"
     [[ "$DRY_RUN" == false ]] && echo "$msg" >> "$LOG_FILE" 2>/dev/null || true
@@ -78,7 +82,8 @@ info() {
     echo -e "${BLUE}${BOLD}[i]${NC} ${BLUE}$1${NC}"
 }
 
-# ─── Safe Command Runner with Fallback ─────────────────────────────────────────────run_cmd() {
+# ─── Safe Command Runner with Fallback ─────────────────────────────────────────────
+run_cmd() {
     local cmd="$1"
     local timeout_sec="${2:-60}"
     local retries="${3:-1}"
@@ -97,7 +102,8 @@ info() {
     return 1
 }
 
-# ─── Pre-flight Checks ───────────────────────────────────────────────────────────────────check_root() {
+# ─── Pre-flight Checks ───────────────────────────────────────────────────────────────────
+check_root() {
     if [[ $EUID -ne 0 ]]; then
         error "This script must be run as root. Use: sudo $0 [options]"
     fi
@@ -239,7 +245,8 @@ check_git() {
     fi
 }
 
-# ─── System Dependencies with Robust Fallback ──────────────────────────────────────────check_system_deps() {
+# ─── System Dependencies with Robust Fallback ──────────────────────────────────────────
+check_system_deps() {
     log "Installing system dependencies..."
 
     local deps=(
@@ -347,7 +354,8 @@ check_git() {
     fi
 }
 
-# ─── Environment Setup ───────────────────────────────────────────────────────────────────────────setup_env() {
+# ─── Environment Setup ───────────────────────────────────────────────────────────────────────────
+setup_env() {
     log "Setting up environment..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -379,7 +387,8 @@ check_git() {
     done
 }
 
-# ─── Claude Desktop Installation with Multiple Fallbacks ─────────────────────────────install_claude_desktop() {
+# ─── Claude Desktop Installation with Multiple Fallbacks ─────────────────────────────
+install_claude_desktop() {
     log "Installing Claude Desktop for Linux..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -473,7 +482,8 @@ WRAPPER
     chown -R "$REAL_USER:$REAL_USER" "$mcp_dir" 2>/dev/null || true
 }
 
-# ─── Core Installation with Safety Checks ──────────────────────────────────────────────install_hexstrike_core() {
+# ─── Core Installation with Safety Checks ──────────────────────────────────────────────
+install_hexstrike_core() {
     log "Installing HexStrike Core..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -557,7 +567,8 @@ WRAPPER
     cd "$SCRIPT_DIR"
 }
 
-# ─── MCP Configuration with Validation ───────────────────────────────────────────────────────────────setup_mcp() {
+# ─── MCP Configuration with Validation ───────────────────────────────────────────────────────────────
+setup_mcp() {
     log "Configuring MCP Bridge..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -613,7 +624,8 @@ EOF
     log "MCP configuration written to $mcp_config ✓"
 }
 
-# ─── Systemd Services with Hardening ───────────────────────────────────────────────────────────────────setup_persistence() {
+# ─── Systemd Services with Hardening ───────────────────────────────────────────────────────────────────
+setup_persistence() {
     log "Setting up systemd services..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -733,7 +745,8 @@ EOF
     fi
 }
 
-# ─── Guardian Installation ────────────────────────────────────────────────────────────────────────────install_guardian() {
+# ─── Guardian Installation ────────────────────────────────────────────────────────────────────────────
+install_guardian() {
     log "Installing Guardian diagnostic tool..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -764,7 +777,8 @@ GUARDIAN_EOF
     log "Guardian installed at /usr/local/bin/guardian ✓"
 }
 
-# ─── User & Permissions ────────────────────────────────────────────────────────────────────────────setup_permissions() {
+# ─── User & Permissions ────────────────────────────────────────────────────────────────────────────
+setup_permissions() {
     log "Configuring permissions..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -786,7 +800,8 @@ GUARDIAN_EOF
     chmod 770 "$INSTALL_DIR/jobs"
 }
 
-# ─── AI Security Lab Deployment ──────────────────────────────────────────────────────────────────────────deploy_lab() {
+# ─── AI Security Lab Deployment ──────────────────────────────────────────────────────────────────────────
+deploy_lab() {
     log "Deploying AI Security Lab..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -806,7 +821,8 @@ GUARDIAN_EOF
     fi
 }
 
-# ─── Workspace Isolation ────────────────────────────────────────────────────────────────────────────setup_workspace() {
+# ─── Workspace Isolation ────────────────────────────────────────────────────────────────────────────
+setup_workspace() {
     local workspace="$REAL_HOME/$WORKSPACE_DIR"
     mkdir -p "$workspace"/{tools,reports,targets,logs,wordlists}
     chown -R "$REAL_USER:$REAL_USER" "$workspace" 2>/dev/null || true
@@ -837,7 +853,8 @@ EOF
     chmod 600 "$config_file"
 }
 
-# ─── Verification ─────────────────────────────────────────────────────────────────────────────────verify_installation() {
+# ─── Verification ─────────────────────────────────────────────────────────────────────────────────
+verify_installation() {
     log "Verifying installation..."
 
     local issues=0
@@ -884,7 +901,8 @@ EOF
     fi
 }
 
-# ─── Stress Test with Multiple Scenarios ─────────────────────────────────────────────────────────────run_stress_test() {
+# ─── Stress Test with Multiple Scenarios ─────────────────────────────────────────────────────────────
+run_stress_test() {
     log "Running stress tests..."
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -937,7 +955,8 @@ EOF
     pkill -f "hexstrike_server" 2>/dev/null || true
 }
 
-# ─── Usage ───────────────────────────────────────────────────────────────────────────────────usage() {
+# ─── Usage ───────────────────────────────────────────────────────────────────────────────────
+usage() {
     cat <<EOF
 ${CYAN}Usage: sudo ./install.sh [OPTIONS]${NC}
 
@@ -961,7 +980,8 @@ ${BOLD}Examples:${NC}
 EOF
 }
 
-# ─── Argument Parsing ──────────────────────────────────────────────────────────────────────────────parse_args() {
+# ─── Argument Parsing ──────────────────────────────────────────────────────────────────────────────
+parse_args() {
     if [[ $# -eq 0 ]]; then
         MODE_FULL=true
     fi
@@ -988,7 +1008,8 @@ EOF
     fi
 }
 
-# ─── Main ──────────────────────────────────────────────────────────────────────────────────────────main() {
+# ─── Main ──────────────────────────────────────────────────────────────────────────────────────────
+main() {
     parse_args "$@"
     print_banner
 
@@ -1040,3 +1061,4 @@ EOF
 }
 
 main "$@"
+

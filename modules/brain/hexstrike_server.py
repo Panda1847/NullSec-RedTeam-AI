@@ -73,7 +73,7 @@ except ImportError as e:
             with self._lock:
                 jobs = list(self._jobs.values())
                 if status:
-                    jobs = [j for j in jobs if j["status"] == status]
+                    jobs = [j for j in jobs if j.get("status") == status]
                 return sorted(jobs, key=lambda x: x["created_at"], reverse=True)[:limit]
 
         def get_stats(self) -> Dict[str, Any]:
@@ -351,7 +351,7 @@ except Exception as e:
             with self._lock:
                 jobs = list(self._jobs.values())
                 if status:
-                    jobs = [j for j in jobs if j["status"] == status]
+                    jobs = [j for j in jobs if j.get("status") == status]
                 return sorted(jobs, key=lambda x: x["created_at"], reverse=True)[:limit]
 
         def get_stats(self):
