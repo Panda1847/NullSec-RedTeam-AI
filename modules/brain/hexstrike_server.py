@@ -14,7 +14,6 @@ import ipaddress
 import logging
 import signal
 import tempfile
-import atexit
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 from functools import wraps

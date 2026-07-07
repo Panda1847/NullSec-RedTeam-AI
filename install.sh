@@ -159,6 +159,9 @@ check_python() {
                     if [[ "$new_major" -ge 3 && "$new_minor" -ge 10 ]]; then
                         python_cmd="$cmd"
                         py_version="$new_version"
+                        # Recompute major/minor from updated py_version
+                        major=$(echo "$py_version" | cut -d. -f1)
+                        minor=$(echo "$py_version" | cut -d. -f2)
                         break
                     fi
                 fi
@@ -875,8 +878,11 @@ verify_installation() {
     # Check key packages
     if [[ -f "$VENV_PATH/bin/python3" ]]; then
         for pkg in flask requests fastmcp Pillow psutil; do
-            "$VENV_PATH/bin/python3" -c "import $pkg" 2>/dev/null || \
-                { warn "Package $pkg missing"; issues=$((issues+1)); }
+            # Pillow's import name is PIL, not Pillow
+            local import_name="$pkg"
+            [[ "$pkg" == "Pillow" ]] && import_name="PIL"
+            "$VENV_PATH/bin/python3" -c "import $import_name" 2>/dev/null || \
+                { warn "Package $pkg missing (import: $import_name)"; issues=$((issues+1)); }
         done
     fi
 
@@ -914,7 +920,7 @@ run_stress_test() {
     systemctl start hexstrike.service 2>/dev/null || {
         warn "Could not start hexstrike via systemd, trying direct start..."
         cd "$INSTALL_DIR"
-        nohup "$VENV_PATH/bin/python3" -m modules.brain.hexstrike_server --host 127.0.0.1 --port 8888 &
+        nohup "$VENV_PATH/bin/python3" -m modules.brain.hexstrike_server --host 127.0.0.1 --port 8888 > "$LOG_DIR/server_stdout.log" 2>&1 &
         sleep 3
     }
 
@@ -1013,7 +1019,13 @@ main() {
     parse_args "$@"
     print_banner
 
-    info "Mode: ${MODE_FULL:+FULL}${MODE_CORE:+CORE}${MODE_DESKTOP:+DESKTOP}${MODE_MCP:+MCP}${MODE_LAB:+LAB}"
+    local modes=""
+    [[ "$MODE_FULL" == true ]] && modes+="FULL "
+    [[ "$MODE_CORE" == true ]] && modes+="CORE "
+    [[ "$MODE_DESKTOP" == true ]] && modes+="DESKTOP "
+    [[ "$MODE_MCP" == true ]] && modes+="MCP "
+    [[ "$MODE_LAB" == true ]] && modes+="LAB "
+    info "Mode: ${modes:-NONE}"
     info "Dry-run: $DRY_RUN"
     info "Elevated: $MODE_ELEVATED"
 

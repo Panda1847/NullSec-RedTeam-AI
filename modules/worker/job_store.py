@@ -340,8 +340,10 @@ class JobStore:
 
         with self._pool.get() as conn:
             try:
+                # Use parameterized query to prevent SQL injection
                 cur = conn.execute(
-                    "DELETE FROM jobs WHERE created_at < datetime('now', '-{} days')".format(days)
+                    "DELETE FROM jobs WHERE created_at < datetime('now', '-' || ? || ' days')",
+                    (str(days),)
                 )
                 return cur.rowcount
             except sqlite3.Error as e:

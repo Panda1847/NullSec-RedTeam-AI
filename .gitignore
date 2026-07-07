@@ -23,3 +23,44 @@ venv/
 
 # Logs
 *.log
+
+
+# Testing
+.pytest_cache/
+.pytest_cache/*
+htmlcov/
+.coverage
+.coverage.*
+*.cover
+
+# Build artifacts
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+*.tar.gz
+
+# Systemd
+*.service
+
+# Environment
+.venv
+venv/
+.envrc
+
+# Backups
+*.backup.*
+*.backup/
+
+# Temp
+/tmp/
+*.tmp
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
