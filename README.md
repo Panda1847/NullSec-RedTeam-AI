@@ -39,6 +39,174 @@ sudo ./install.sh --dry-run --full
 sudo ./install.sh --full
 ```
 
+### Complete Command Quickstart
+
+Run these commands in order on Kali Linux, Debian 12+, or Ubuntu 22.04+.
+
+```bash
+# 1. Enter the project directory
+cd NullSec-RedTeam-AI
+
+# 2. Make the installer executable
+chmod +x install.sh
+
+# 3. Review installer options
+sudo ./install.sh --help
+
+# 4. Preview changes before installing
+sudo ./install.sh --dry-run --full
+
+# 5. Install the full platform
+sudo ./install.sh --full
+```
+
+Optional install profiles:
+
+```bash
+# Core security tooling and server only
+sudo ./install.sh --core
+
+# Claude Desktop only
+sudo ./install.sh --desktop
+
+# MCP bridge configuration only
+sudo ./install.sh --mcp
+
+# AI Security Lab only
+sudo ./install.sh --lab
+
+# Desktop plus MCP integration
+sudo ./install.sh --desktop --mcp
+
+# Full install plus stress test
+sudo ./install.sh --full --stress
+```
+
+> `--elevated` enables broader system access and should only be used when you understand the risk:
+
+```bash
+sudo ./install.sh --full --elevated
+```
+
+### Start and Verify Services
+
+```bash
+# Reload systemd and start services
+sudo systemctl daemon-reload
+sudo systemctl enable --now hexstrike
+sudo systemctl enable --now hexstrike-worker
+
+# Check status
+sudo systemctl status hexstrike --no-pager
+sudo systemctl status hexstrike-worker --no-pager
+
+# Check public health endpoint
+curl http://127.0.0.1:8888/health
+```
+
+### API Usage
+
+```bash
+# Load the generated API token
+export API_TOKEN="$(sudo cat /etc/nullsec/api_token)"
+
+# List available tools
+curl -H "Authorization: Bearer $API_TOKEN" \
+  http://127.0.0.1:8888/api/tools
+
+# List jobs
+curl -H "Authorization: Bearer $API_TOKEN" \
+  http://127.0.0.1:8888/api/jobs
+
+# Get server statistics
+curl -H "Authorization: Bearer $API_TOKEN" \
+  http://127.0.0.1:8888/api/stats
+
+# Queue a safe localhost scan example
+curl -X POST http://127.0.0.1:8888/api/tools/execute \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tool":"nmap","target":"127.0.0.1","options":"-sV"}'
+
+# Check a queued job, replacing JOB_ID_HERE with the returned job_id
+curl -H "Authorization: Bearer $API_TOKEN" \
+  http://127.0.0.1:8888/api/jobs/JOB_ID_HERE
+```
+
+### CLI Tools
+
+```bash
+# HexStrike server
+hexstrike-server --host 127.0.0.1 --port 8888
+
+# Worker
+nullsec-worker --poll 2 --timeout 300
+
+# MCP bridge
+hexstrike-mcp
+
+# Guardian diagnostics
+guardian --check
+guardian --report
+guardian "connection error"
+guardian --repair
+guardian --stress
+guardian --version
+
+# AI Security Lab
+ai-lab --list
+ai-lab --technique prompt_injection --topic general
+ai-lab --model test-model --scan
+ai-lab --mcp
+```
+
+### Logs and Service Control
+
+```bash
+# Logs
+sudo tail -f /var/log/nullsec/server.log
+sudo tail -f /var/log/nullsec/worker.log
+sudo tail -f /var/log/nullsec/install.log
+
+# Restart services
+sudo systemctl restart hexstrike hexstrike-worker
+
+# Stop services
+sudo systemctl stop hexstrike hexstrike-worker
+
+# Disable autostart
+sudo systemctl disable hexstrike hexstrike-worker
+```
+
+### Local Development Fallback
+
+Use this if you want to run without the system installer.
+
+```bash
+cd NullSec-RedTeam-AI
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
+pip install -e .
+
+mkdir -p .nullsec/logs .nullsec/jobs
+export NULLSEC_LOG_DIR="$PWD/.nullsec/logs"
+export NULLSEC_JOB_DIR="$PWD/.nullsec/jobs"
+export API_TOKEN="dev-token-change-me"
+
+# Terminal 1
+hexstrike-server --host 127.0.0.1 --port 8888
+
+# Terminal 2
+nullsec-worker --poll 2
+
+# Test local API
+curl http://127.0.0.1:8888/health
+curl -H "Authorization: Bearer dev-token-change-me" \
+  http://127.0.0.1:8888/api/tools
+```
+
 ### Deployment Profiles
 
 | Profile | Flag | Scope |

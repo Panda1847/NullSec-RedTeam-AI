@@ -64,3 +64,4 @@ venv/
 .idea/
 *.sublime-project
 *.sublime-workspace
+.aider*
