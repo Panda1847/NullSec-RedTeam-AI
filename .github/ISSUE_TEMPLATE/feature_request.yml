@@ -1,0 +1,39 @@
+name: Feature proposal
+description: Propose a narrowly scoped, authorization-first capability.
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the operator or contributor problem, not only an implementation idea.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include interfaces, default behavior, and expected failure behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Authorization and safety analysis
+      description: Explain required permissions, target-scope effects, containment implications, logging/redaction needs, and how unsafe use is prevented.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Test and validation plan
+      description: State how the proposal can be validated without operating against a live unauthorized target.
+    validations:
+      required: true

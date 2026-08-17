@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+venv/
+.env
+
+# Logs
+*.log
+
+
+# Testing
+.pytest_cache/
+.pytest_cache/*
+htmlcov/
+.coverage
+.coverage.*
+*.cover
+
+# Build artifacts
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+*.tar.gz
+
+# Local NullSec runtime state
+.nullsec/
+nullsec_jobs/
+nullsec_logs/
+
+# Environment
+.venv
+venv/
+.envrc
+
+# Backups
+*.backup.*
+*.backup/
+
+# Temp
+/tmp/
+*.tmp
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.aider*

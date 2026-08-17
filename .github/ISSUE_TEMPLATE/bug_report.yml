@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a reproducible defect without disclosing sensitive target or credential data.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security vulnerabilities, credentials, target inventories, or sensitive execution output here. Follow SECURITY.md instead.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Include the package version or commit SHA.
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - API server
+        - MCP bridge
+        - Worker / runner
+        - Job store
+        - Policy / campaign controls
+        - AI Security Lab
+        - Installer / deployment
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Safe reproduction steps
+      description: Use mocks, loopback addresses, or a simulated runner. Do not include live targets.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and redacted logs
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I used only an authorized, local, or simulated environment.
+          required: true
+        - label: I removed credentials, private target information, and sensitive evidence.
+          required: true
