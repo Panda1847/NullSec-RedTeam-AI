@@ -11,7 +11,11 @@ NullSec-RedTeam-AI is a single-host control plane for governed security-tool wor
 
 > **Use only with explicit written authorization.** This project is early-stage security software, not an autonomous red-team system, a substitute for an engagement agreement, or a multi-tenant service. Run it in isolated test environments or on assets you are expressly authorized to assess.
 
-![Authorization-first control-plane architecture](docs/assets/control-plane-architecture.png)
+<p align="center">
+  <a href="docs/assets/control-plane-architecture.png">
+    <img src="docs/assets/control-plane-architecture.png" alt="Authorization-first control-plane architecture" width="420" />
+  </a>
+</p>
 
 ## Why NullSec?
 
