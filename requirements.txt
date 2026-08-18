@@ -22,7 +22,7 @@ psutil>=5.9.0
 flask-limiter>=3.5.0
 
 # Image Processing
-Pillow>=10.0.0
+Pillow>=12.3.0
 
 # Database (sqlite3 is built-in, but we list it for clarity)
 # sqlite3 is part of Python standard library

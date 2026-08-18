@@ -27,12 +27,12 @@ classifiers = [
 dependencies = [
   "Flask>=3.0,<4",
   "Werkzeug>=3.0,<4",
-  "gunicorn>=22,<24",
+  "gunicorn>=22,<27",
   "requests>=2.31,<3",
   "urllib3>=2.0,<3",
   "fastmcp>=3.2,<4",
   "pydantic>=2.7,<3",
-  "flask-limiter>=3.8,<4",
+  "flask-limiter>=3.8,<5",
   "cryptography>=50,<51",
   "psutil>=5.9,<8",
 ]
