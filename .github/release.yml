@@ -1,0 +1,34 @@
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+      - duplicate
+      - invalid
+    authors:
+      - dependabot[bot]
+  categories:
+    - title: Breaking changes
+      labels:
+        - breaking-change
+        - semver-major
+    - title: Security and containment
+      labels:
+        - security
+        - containment
+    - title: Features
+      labels:
+        - enhancement
+        - feature
+        - semver-minor
+    - title: Reliability and quality
+      labels:
+        - bug
+        - reliability
+        - documentation
+        - testing
+    - title: Dependency updates
+      labels:
+        - dependencies
+    - title: Other changes
+      labels:
+        - "*"

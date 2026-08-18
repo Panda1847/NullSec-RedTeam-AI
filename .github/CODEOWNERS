@@ -1,0 +1,14 @@
+# Default maintainership routing for protected-branch review.
+* @Panda1847
+
+# Security-sensitive control plane and release automation.
+/modules/brain/ @Panda1847
+/modules/domain/ @Panda1847
+/modules/runners/ @Panda1847
+/modules/worker/ @Panda1847
+/.github/ @Panda1847
+
+# Public safety and operational documentation.
+/RESPONSIBLE_USE.md @Panda1847
+/SECURITY.md @Panda1847
+/docs/ @Panda1847
